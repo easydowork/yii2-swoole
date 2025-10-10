@@ -1,0 +1,8 @@
+/vendor/
+/.idea/
+/.phpunit.result.cache
+/vendor
+composer.lock
+.phpunit.result.cache
+.DS_Store
+/app/runtime/

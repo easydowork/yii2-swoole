@@ -1,0 +1,46 @@
+{
+  "name": "dacheng-php/yii2-swoole",
+  "version": "1.0.0-dev",
+  "description": "Yii2 extension for Swoole coroutines: asynchronous HTTP server, database/Redis connection pools, and more for high-concurrency PHP apps.",
+  "keywords": [
+    "Yii2",
+    "Swoole",
+    "Coroutine",
+    "HTTP Server",
+    "Connection Pools"
+  ],
+  "type": "yii2-extension",
+  "license": "MIT",
+  "require": {
+    "php": ">=8.1",
+    "ext-swoole": "^6.0",
+    "yiisoft/yii2": "^2.0"
+  },
+  "require-dev": {
+    "yidas/yii2-composer-bower-skip": "2.0.13",
+    "swoole/ide-helper": "6.0.2"
+  },
+  "autoload": {
+    "psr-4": {
+      "Dacheng\\Yii2\\Swoole\\": "src/"
+    }
+  },
+  "extra": {
+    "branch-alias": {
+      "dev-main": "1.0.x-dev"
+    }
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true,
+  "config": {
+    "allow-plugins": {
+      "yiisoft/yii2-composer": true
+    }
+  },
+  "repositories": [
+    {
+      "type": "composer",
+      "url": "https://asset-packagist.org"
+    }
+  ]
+}
