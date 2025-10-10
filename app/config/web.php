@@ -7,7 +7,7 @@ $swooleConfig = require __DIR__ . '/swoole.php';
 $config = [
     'id' => 'yii2-swoole-example',
     'basePath' => dirname(__DIR__),
-    'bootstrap' => [],
+    'bootstrap' => ['log'],
     'components' => [
         'request' => [
             'cookieValidationKey' => 'test-secret-key',
@@ -21,10 +21,13 @@ $config = [
         ],
         'log' => [
             'traceLevel' => YII_DEBUG ? 3 : 0,
+            'flushInterval' => 1,
             'targets' => [
                 [
                     'class' => 'yii\\log\\FileTarget',
                     'levels' => ['error', 'warning'],
+                    'exportInterval' => 1,
+                    'logFile' => '@runtime/logs/app.log',
                 ],
             ],
         ],

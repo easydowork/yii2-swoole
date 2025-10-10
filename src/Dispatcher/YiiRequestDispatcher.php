@@ -11,7 +11,9 @@ use Swoole\Http\Response;
 use Throwable;
 use Yii;
 use yii\base\BaseObject;
+use yii\base\ErrorHandler;
 use yii\base\InvalidConfigException;
+use yii\log\Logger;
 use yii\web\Application;
 use yii\web\Cookie;
 use yii\web\CookieCollection;
@@ -61,24 +63,115 @@ class YiiRequestDispatcher extends BaseObject implements RequestDispatcherInterf
 
         $yiiResponse = $app->getResponse();
         $yiiResponse->clear();
+        $yiiResponse->format = YiiResponse::FORMAT_HTML;
+        $this->prepareLogger($app);
 
         try {
             $handledResponse = $app->handleRequest($yiiRequest);
             $this->finalizeResponse($response, $handledResponse);
         } catch (Throwable $exception) {
-            Yii::error($exception, __METHOD__);
+            if (!$this->handleExceptionWithYii($exception, $app, $response)) {
+                Yii::error($exception, __METHOD__);
 
-            if ($this->isWritable($response)) {
-                $response->status(500);
-                $response->header('Content-Type', 'text/plain; charset=UTF-8');
-                $body = defined('YII_DEBUG') && YII_DEBUG ? (string) $exception : 'Internal Server Error';
-                $response->end($body);
+                if ($this->isWritable($response)) {
+                    $response->status(500);
+                    $response->header('Content-Type', 'text/plain; charset=UTF-8');
+                    $body = defined('YII_DEBUG') && YII_DEBUG ? (string) $exception : 'Internal Server Error';
+                    $response->end($body);
+                }
             }
         } finally {
             $app->params['__swooleRequest'] = null;
             $app->set('request', $originalRequest);
             $yiiResponse->clear();
+            $yiiResponse->format = YiiResponse::FORMAT_HTML;
+            $this->flushLogger($app);
             $restoreGlobals();
+        }
+    }
+
+    private function handleExceptionWithYii(Throwable $exception, Application $app, Response $swooleResponse): bool
+    {
+        try {
+            if (!$app->has('errorHandler')) {
+                return false;
+            }
+
+            /** @var ErrorHandler|null $errorHandler */
+            $errorHandler = $app->getErrorHandler();
+            if ($errorHandler === null) {
+                return false;
+            }
+
+            $errorHandler->exception = $exception;
+            $errorHandler->logException($exception);
+
+            $bufferLevel = ob_get_level();
+            ob_start();
+            try {
+                $this->invokeErrorHandlerRenderException($errorHandler, $exception);
+                $bufferedOutput = ob_get_contents() ?: '';
+            } finally {
+                while (ob_get_level() > $bufferLevel) {
+                    ob_end_clean();
+                }
+
+                $errorHandler->exception = null;
+            }
+
+            $yiiResponse = $app->getResponse();
+            if ($yiiResponse->isSent) {
+                $yiiResponse->isSent = false;
+            }
+
+            if ($yiiResponse->content === null) {
+                $yiiResponse->content = $bufferedOutput;
+            }
+
+            if ($this->isWritable($swooleResponse)) {
+                $this->finalizeResponse($swooleResponse, $yiiResponse);
+            }
+
+            return true;
+        } catch (Throwable $handlerException) {
+            Yii::error($handlerException, __METHOD__ . '::errorHandler');
+
+            return false;
+        }
+    }
+
+    private function invokeErrorHandlerRenderException(ErrorHandler $errorHandler, Throwable $exception): void
+    {
+        $method = (new \ReflectionObject($errorHandler))->getMethod('renderException');
+        $method->setAccessible(true);
+        $method->invoke($errorHandler, $exception);
+    }
+
+    private function prepareLogger(Application $app): void
+    {
+        if (!$app->has('log')) {
+            return;
+        }
+
+        $log = $app->getLog();
+        $logger = $log->getLogger();
+
+        if ($logger instanceof Logger) {
+            $logger->flush();
+        }
+    }
+
+    private function flushLogger(Application $app): void
+    {
+        if (!$app->has('log')) {
+            return;
+        }
+
+        $log = $app->getLog();
+        $logger = $log->getLogger();
+
+        if ($logger instanceof Logger) {
+            $logger->flush(true);
         }
     }
 

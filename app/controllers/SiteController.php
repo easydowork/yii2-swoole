@@ -2,18 +2,19 @@
 
 namespace app\controllers;
 
+use Throwable;
 use Yii;
+use yii\base\Exception as YiiException;
 use yii\web\Controller;
+use yii\web\HttpException;
+use yii\web\NotFoundHttpException;
+use yii\web\Response;
 
 class SiteController extends Controller
 {
     public function actions()
     {
-        return [
-            'error' => [
-                'class' => 'yii\web\ErrorAction',
-            ],
-        ];
+        return [];
     }
 
     /**
@@ -91,5 +92,47 @@ class SiteController extends Controller
             'message' => "Slept for {$seconds} seconds using coroutine",
             'timestamp' => time(),
         ]);
+    }
+
+    public function actionError()
+    {
+        $exception = Yii::$app->errorHandler->exception;
+
+        if ($exception === null) {
+            $exception = new NotFoundHttpException('Page not found.');
+        }
+
+        $statusCode = $exception instanceof HttpException ? $exception->statusCode : 500;
+        $response = Yii::$app->response;
+        $response->setStatusCode($statusCode);
+        $statusText = $response->statusText ?: (Response::$httpStatuses[$statusCode] ?? 'Error');
+
+        $data = [
+            'name' => $this->resolveExceptionName($exception, $statusText),
+            'message' => $exception->getMessage() ?: $statusText,
+            'status' => $statusCode,
+        ];
+
+        if (YII_DEBUG) {
+            $data['type'] = get_class($exception);
+            $data['file'] = $exception->getFile();
+            $data['line'] = $exception->getLine();
+            $data['trace'] = explode(PHP_EOL, $exception->getTraceAsString());
+        }
+
+        return $this->asJson($data);
+    }
+
+    private function resolveExceptionName(Throwable $exception, string $statusText): string
+    {
+        if ($exception instanceof HttpException) {
+            return $statusText;
+        }
+
+        if ($exception instanceof YiiException) {
+            return $exception->getName();
+        }
+
+        return 'Error';
     }
 }
