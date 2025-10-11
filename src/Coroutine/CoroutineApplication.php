@@ -37,14 +37,6 @@ class CoroutineApplication extends Application
             return $store[$id];
         }
 
-        $components = $this->getComponents(false);
-        if (array_key_exists($id, $components)) {
-            $component = $components[$id];
-            $this->setCoroutineComponent($id, $component);
-
-            return $component;
-        }
-
         $definitions = $this->getComponents();
         if (!array_key_exists($id, $definitions)) {
             if ($throwException) {
@@ -54,16 +46,22 @@ class CoroutineApplication extends Application
             return null;
         }
 
-        $definition = $definitions[$id];
-        if (is_object($definition) && !$definition instanceof Closure) {
-            $component = clone $definition;
-        } else {
-            $component = Yii::createObject($definition);
-        }
-
+        $component = $this->createCoroutineComponent($definitions[$id]);
         $this->setCoroutineComponent($id, $component);
 
         return $component;
+    }
+
+    public function has($id, $checkInstance = false)
+    {
+        if ($checkInstance && $this->isCoroutineContext() && !$this->isSharedComponent($id)) {
+            $store = $this->getCoroutineComponentStore();
+            if (array_key_exists($id, $store)) {
+                return true;
+            }
+        }
+
+        return parent::has($id, $checkInstance);
     }
 
     /**
@@ -145,5 +143,14 @@ class CoroutineApplication extends Application
         $store = $this->getCoroutineComponentStore();
         $store[$id] = $component;
         $this->setCoroutineComponentStore($store);
+    }
+
+    private function createCoroutineComponent($definition)
+    {
+        if (is_object($definition) && !$definition instanceof Closure) {
+            return clone $definition;
+        }
+
+        return Yii::createObject($definition);
     }
 }

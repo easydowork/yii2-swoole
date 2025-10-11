@@ -28,6 +28,10 @@ class RequestDispatcher extends BaseObject implements RequestDispatcherInterface
 
     private ?Application $application = null;
 
+    private ?array $applicationConfig = null;
+
+    private ?string $applicationClass = null;
+
     private ?string $entryScript = null;
 
     public function __construct(?string $appConfig = null, array $config = [])
@@ -50,7 +54,9 @@ class RequestDispatcher extends BaseObject implements RequestDispatcherInterface
 
     public function dispatch(Request $request, Response $response, CoroutineHttpServer $server): void
     {
+        $previousApp = Yii::$app instanceof Application ? Yii::$app : null;
         $app = $this->getApplication();
+        Yii::$app = $app;
 
         $restoreGlobals = $this->applySwooleGlobals($request, $app);
 
@@ -90,6 +96,8 @@ class RequestDispatcher extends BaseObject implements RequestDispatcherInterface
             if ($app instanceof CoroutineApplication) {
                 $app->resetCoroutineContext();
             }
+
+            $this->restorePreviousApplication($previousApp);
         }
     }
 
@@ -184,24 +192,46 @@ class RequestDispatcher extends BaseObject implements RequestDispatcherInterface
             return $this->application;
         }
 
+        [$class, $config] = $this->loadApplicationConfig();
+
+        /** @var class-string<Application> $class */
+        $this->application = new $class($config);
+
+        return $this->application;
+    }
+
+    /**
+     * @return array{0: class-string<Application>, 1: array<string, mixed>}
+     */
+    private function loadApplicationConfig(): array
+    {
+        if ($this->applicationConfig !== null && $this->applicationClass !== null) {
+            return [$this->applicationClass, $this->applicationConfig];
+        }
+
         $config = require $this->appConfig;
 
         if ($config instanceof Application) {
-            $this->application = $config;
-        } elseif (is_array($config)) {
-            $class = $config['class'] ?? CoroutineApplication::class;
-            unset($config['class']);
-
-            if (!is_subclass_of($class, Application::class)) {
-                throw new InvalidConfigException(sprintf('Application class "%s" must be a subclass of %s.', $class, Application::class));
-            }
-
-            $this->application = new $class($config);
-        } else {
-            throw new InvalidConfigException('Application config must return array or instance of yii\\web\\Application.');
+            throw new InvalidConfigException('Application config must return an array, not an instance of yii\\web\\Application.');
         }
 
-        return $this->application;
+        if (!is_array($config)) {
+            throw new InvalidConfigException('Application config must return an array or configure yii\\web\\Application.');
+        }
+
+        $class = $config['class'] ?? CoroutineApplication::class;
+
+        if (!is_string($class) || !is_a($class, Application::class, true)) {
+            throw new InvalidConfigException(sprintf('Application class "%s" must be a subclass of %s.', (string) $class, Application::class));
+        }
+
+        unset($config['class']);
+
+        $this->applicationClass = $class;
+        $this->applicationConfig = $config;
+
+        /** @var class-string<Application> $class */
+        return [$class, $config];
     }
 
     private function populateRequest(Application $app, YiiRequest $yiiRequest, Request $swooleRequest): void
@@ -457,6 +487,17 @@ class RequestDispatcher extends BaseObject implements RequestDispatcherInterface
         $method = (new \ReflectionObject($response))->getMethod('sendContent');
         $method->setAccessible(true);
         $method->invoke($response);
+    }
+
+    private function restorePreviousApplication(?Application $previousApp): void
+    {
+        if ($previousApp !== null) {
+            Yii::$app = $previousApp;
+
+            return;
+        }
+
+        Yii::$app = null;
     }
 }
 
