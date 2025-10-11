@@ -74,9 +74,13 @@ class CoroutineApplication extends Application
         }
 
         $store = $this->getCoroutineComponentStore();
-        foreach ($store as $component) {
+        foreach ($store as $id => $component) {
             if (!is_object($component)) {
                 continue;
+            }
+
+            if (method_exists($component, 'close')) {
+                $component->close();
             }
 
             if (method_exists($component, 'reset')) {
@@ -85,10 +89,6 @@ class CoroutineApplication extends Application
 
             if (method_exists($component, 'clear')) {
                 $component->clear();
-            }
-
-            if (method_exists($component, 'close')) {
-                $component->close();
             }
         }
 

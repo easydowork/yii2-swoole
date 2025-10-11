@@ -1,6 +1,7 @@
 <?php
 
 use yii\helpers\ArrayHelper;
+use Dacheng\Yii2\Swoole\Db\CoroutineConnection;
 
 $swooleConfig = require __DIR__ . '/swoole.php';
 
@@ -15,6 +16,16 @@ $config = [
         ],
         'cache' => [
             'class' => \yii\caching\DummyCache::class,
+        ],
+        'db' => [
+            'class' => CoroutineConnection::class,
+            'dsn' => getenv('YII_DB_DSN') ?: 'mysql:host=127.0.0.1;dbname=yii2swoole',
+            'username' => getenv('YII_DB_USERNAME') ?: 'root',
+            'password' => getenv('YII_DB_PASSWORD') ?: '',
+            'charset' => 'utf8mb4',
+            'poolMaxActive' => (int) (getenv('YII_DB_POOL_MAX_ACTIVE') ?: 20),
+            'poolMinActive' => (int) (getenv('YII_DB_POOL_MIN_ACTIVE') ?: 10),
+            'poolWaitTimeout' => (float) (getenv('YII_DB_POOL_WAIT_TIMEOUT') ?: 5.0),
         ],
         'errorHandler' => [
             'errorAction' => 'site/error',

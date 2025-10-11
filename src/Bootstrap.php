@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Dacheng\Yii2\Swoole;
 
+use Swoole\Runtime;
 use Yii;
 use yii\base\BootstrapInterface;
 use yii\base\InvalidConfigException;
@@ -14,8 +15,19 @@ class Bootstrap implements BootstrapInterface
 
     public string $componentId = self::DEFAULT_COMPONENT_ID;
 
+    public string $memoryLimit = '512M';
+
     public function bootstrap($app): void
     {
+        if (extension_loaded('swoole') && method_exists(Runtime::class, 'enableCoroutine')) {
+            Runtime::enableCoroutine(SWOOLE_HOOK_ALL);
+        }
+
+        $memoryLimit = getenv('SWOOLE_MEMORY_LIMIT') ?: $this->memoryLimit;
+        if ($memoryLimit !== '' && function_exists('ini_set')) {
+            ini_set('memory_limit', $memoryLimit);
+        }
+
         Yii::setAlias('@dacheng/swoole', __DIR__);
 
         $componentId = $this->componentId;

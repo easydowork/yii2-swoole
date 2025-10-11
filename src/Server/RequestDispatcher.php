@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Dacheng\Yii2\Swoole\Server;
 
 use Dacheng\Yii2\Swoole\Coroutine\CoroutineApplication;
+use Dacheng\Yii2\Swoole\Db\CoroutineConnection;
 use Swoole\Coroutine\Http\Server as CoroutineHttpServer;
 use Swoole\Http\Request;
 use Swoole\Http\Response;
@@ -91,6 +92,7 @@ class RequestDispatcher extends BaseObject implements RequestDispatcherInterface
             $yiiResponse->clear();
             $yiiResponse->format = YiiResponse::FORMAT_HTML;
             $this->flushLogger($app);
+
             $restoreGlobals();
 
             if ($app instanceof CoroutineApplication) {
