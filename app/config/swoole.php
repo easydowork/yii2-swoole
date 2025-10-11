@@ -17,7 +17,7 @@ return [
                 'enable_coroutine' => true,
                 'max_coroutine' => 3000,
             ],
-            'dispatcher' => new \Dacheng\Yii2\Swoole\Dispatcher\YiiRequestDispatcher(__DIR__ . '/web.php'),
+            'dispatcher' => new \Dacheng\Yii2\Swoole\Server\RequestDispatcher(__DIR__ . '/web.php'),
         ],
     ],
 ];

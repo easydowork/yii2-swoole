@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Dacheng\Yii2\Swoole\Dispatcher;
+namespace Dacheng\Yii2\Swoole\Server;
 
-use Dacheng\Yii2\Swoole\Server\RequestDispatcherInterface;
+use Dacheng\Yii2\Swoole\Coroutine\CoroutineApplication;
 use Swoole\Coroutine\Http\Server as CoroutineHttpServer;
 use Swoole\Http\Request;
 use Swoole\Http\Response;
@@ -22,13 +22,11 @@ use yii\web\Request as YiiRequest;
 use yii\web\Response as YiiResponse;
 use yii\web\ResponseFormatterInterface;
 
-class YiiRequestDispatcher extends BaseObject implements RequestDispatcherInterface
+class RequestDispatcher extends BaseObject implements RequestDispatcherInterface
 {
     public ?string $appConfig = null;
 
     private ?Application $application = null;
-
-    private ?array $requestDefinition = null;
 
     private ?string $entryScript = null;
 
@@ -56,10 +54,12 @@ class YiiRequestDispatcher extends BaseObject implements RequestDispatcherInterf
 
         $restoreGlobals = $this->applySwooleGlobals($request, $app);
 
-        $originalRequest = $app->get('request');
-        $yiiRequest = $this->createRequest($app);
+        $yiiRequest = $app->getRequest();
+        if (!$yiiRequest instanceof YiiRequest) {
+            throw new InvalidConfigException('Application "request" component must be an instance of yii\\web\\Request.');
+        }
+
         $this->populateRequest($app, $yiiRequest, $request);
-        $app->set('request', $yiiRequest);
 
         $yiiResponse = $app->getResponse();
         $yiiResponse->clear();
@@ -82,11 +82,14 @@ class YiiRequestDispatcher extends BaseObject implements RequestDispatcherInterf
             }
         } finally {
             $app->params['__swooleRequest'] = null;
-            $app->set('request', $originalRequest);
             $yiiResponse->clear();
             $yiiResponse->format = YiiResponse::FORMAT_HTML;
             $this->flushLogger($app);
             $restoreGlobals();
+
+            if ($app instanceof CoroutineApplication) {
+                $app->resetCoroutineContext();
+            }
         }
     }
 
@@ -186,38 +189,19 @@ class YiiRequestDispatcher extends BaseObject implements RequestDispatcherInterf
         if ($config instanceof Application) {
             $this->application = $config;
         } elseif (is_array($config)) {
-            $this->application = new Application($config);
+            $class = $config['class'] ?? CoroutineApplication::class;
+            unset($config['class']);
+
+            if (!is_subclass_of($class, Application::class)) {
+                throw new InvalidConfigException(sprintf('Application class "%s" must be a subclass of %s.', $class, Application::class));
+            }
+
+            $this->application = new $class($config);
         } else {
             throw new InvalidConfigException('Application config must return array or instance of yii\\web\\Application.');
         }
 
         return $this->application;
-    }
-
-    private function createRequest(Application $app): YiiRequest
-    {
-        if ($this->requestDefinition === null) {
-            $definition = $app->getComponents(true)['request'] ?? null;
-
-            if ($definition instanceof YiiRequest) {
-                $definition = ['class' => get_class($definition)];
-            } elseif (is_string($definition)) {
-                $definition = ['class' => $definition];
-            } elseif (!is_array($definition)) {
-                $definition = [];
-            }
-
-            if (empty($definition['class'])) {
-                $definition['class'] = get_class($app->getRequest());
-            }
-
-            $this->requestDefinition = $definition;
-        }
-
-        /** @var YiiRequest $request */
-        $request = Yii::createObject($this->requestDefinition);
-
-        return $request;
     }
 
     private function populateRequest(Application $app, YiiRequest $yiiRequest, Request $swooleRequest): void
@@ -230,17 +214,11 @@ class YiiRequestDispatcher extends BaseObject implements RequestDispatcherInterf
         $queryString = $server['query_string'] ?? '';
         $scheme = $headers['x-forwarded-proto'] ?? (!empty($server['https']) && $server['https'] !== 'off' ? 'https' : 'http');
         $hostHeader = $headers['host'] ?? ($server['server_name'] ?? '127.0.0.1');
-        
-        // Parse host and port from host header
-        $hostParts = explode(':', $hostHeader);
-        $host = $hostParts[0];
-        $port = isset($hostParts[1]) ? (int)$hostParts[1] : ($scheme === 'https' ? 443 : 80);
-        
+
         $fullUrl = $queryString === '' ? $uri : $uri . '?' . $queryString;
         $scriptUrl = '/index.php';
         $baseUrl = '';
-        
-        // Extract pathInfo from URI
+
         $pathInfo = $uri;
         if (($pos = strpos($pathInfo, '?')) !== false) {
             $pathInfo = substr($pathInfo, 0, $pos);
@@ -253,13 +231,13 @@ class YiiRequestDispatcher extends BaseObject implements RequestDispatcherInterf
         if (method_exists($yiiRequest, 'setMethod')) {
             $yiiRequest->setMethod($method);
         }
+
         $yiiRequest->setHostInfo(sprintf('%s://%s', $scheme, $hostHeader));
         $yiiRequest->setUrl($fullUrl);
         $yiiRequest->setScriptUrl($scriptUrl);
         $yiiRequest->setBaseUrl($baseUrl);
         $yiiRequest->setPathInfo($pathInfo);
 
-        // Populate headers
         $headerCollection = $yiiRequest->getHeaders();
         if ($headerCollection instanceof HeaderCollection) {
             $headerCollection->removeAll();
@@ -268,7 +246,6 @@ class YiiRequestDispatcher extends BaseObject implements RequestDispatcherInterf
             }
         }
 
-        // Populate cookies
         if (!empty($swooleRequest->cookie)) {
             $cookieCollection = $yiiRequest->getCookies();
             if ($cookieCollection instanceof CookieCollection) {
@@ -287,7 +264,6 @@ class YiiRequestDispatcher extends BaseObject implements RequestDispatcherInterf
             }
         }
 
-        // Handle file uploads
         if (!empty($swooleRequest->files)) {
             $yiiRequest->setBodyParams(array_merge($yiiRequest->getBodyParams(), $swooleRequest->files));
         }
@@ -446,13 +422,9 @@ class YiiRequestDispatcher extends BaseObject implements RequestDispatcherInterf
             return;
         }
 
-        $formatter = null;
-        $formatters = $response->formatters;
-
-        if (isset($formatters[$response->format])) {
-            $formatter = $formatters[$response->format];
-        } elseif (isset($formatters['default'])) {
-            $formatter = $formatters['default'];
+        $formatter = $response->formatters[$response->format] ?? null;
+        if ($formatter === null && isset($response->formatters['default'])) {
+            $formatter = $response->formatters['default'];
         }
 
         if ($formatter !== null) {
@@ -486,5 +458,5 @@ class YiiRequestDispatcher extends BaseObject implements RequestDispatcherInterf
         $method->setAccessible(true);
         $method->invoke($response);
     }
-
 }
+
