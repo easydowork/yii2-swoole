@@ -18,9 +18,10 @@ class CoroutineApplication extends Application
      * @var string[] component IDs that should remain shared across coroutines.
      */
     protected array $sharedComponentIds = [
-        'log',
+        'cache',
         'formatter',
         'i18n',
+        'log',
     ];
 
     /**

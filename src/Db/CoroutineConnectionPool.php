@@ -23,6 +23,10 @@ final class CoroutineConnectionPool
 
     private Channel $creationLock;
 
+    private int $idle = 0;
+
+    private int $waiters = 0;
+
     /**
      * @var callable
      */
@@ -46,31 +50,40 @@ final class CoroutineConnectionPool
         $this->creationLock->push(true);
 
         for ($i = 0; $i < $this->minActive; $i++) {
-            $this->channel->push($this->createConnection());
+            $this->pushConnection($this->createConnection());
         }
+
+        $this->idle = $this->minActive;
     }
 
     public function acquire(): PDO
     {
-        $stats = $this->channel->stats();
-        $idle = (int) ($stats['queue_num'] ?? 0);
-        $waiters = (int) ($stats['consumer_num'] ?? 0);
-
         $connection = $this->channel->pop(0.0);
         if ($connection instanceof PDO) {
-            if ($this->created < $this->maxActive && $waiters > 0) {
-                $this->growPool($waiters);
-            }
+            $this->decrementIdle();
 
             return $connection;
         }
 
-        [$newConnection, $creationException] = $this->growPool(max(1, $waiters + 1), true);
-        if ($newConnection instanceof PDO) {
-            return $newConnection;
+        $creationException = null;
+
+        if ($this->created < $this->maxActive) {
+            $availableSlots = $this->maxActive - $this->created;
+            [$newConnection, $creationException] = $this->growPool($availableSlots, true);
+
+            if ($newConnection instanceof PDO) {
+                return $newConnection;
+            }
         }
 
-        $connection = $this->channel->pop($this->waitTimeout);
+        $this->waiters++;
+
+        try {
+            $connection = $this->channel->pop($this->waitTimeout);
+        } finally {
+            $this->waiters = max(0, $this->waiters - 1);
+        }
+
         if (!$connection instanceof PDO) {
             if ($creationException !== null) {
                 throw $creationException;
@@ -86,17 +99,14 @@ final class CoroutineConnectionPool
             );
         }
 
+        $this->decrementIdle();
+
         return $connection;
     }
 
     public function release(PDO $connection): void
     {
-        if ($this->channel->push($connection, 0.0)) {
-            return;
-        }
-
-        $this->created--;
-        $this->closeConnection($connection);
+        $this->pushConnection($connection);
     }
 
     /**
@@ -125,7 +135,9 @@ final class CoroutineConnectionPool
                 if ($returnFirst && $firstConnection === null) {
                     $firstConnection = $connection;
                 } else {
-                    $this->channel->push($connection);
+                    if (!$this->pushConnection($connection)) {
+                        break;
+                    }
                 }
 
                 $required--;
@@ -151,15 +163,11 @@ final class CoroutineConnectionPool
      */
     public function getStats(): array
     {
-        $stats = $this->channel->stats();
-        $idle = (int) ($stats['queue_num'] ?? 0);
-        $waiters = (int) ($stats['consumer_num'] ?? 0);
-
         return [
             'created' => $this->created,
-            'idle' => $idle,
-            'in_use' => max(0, $this->created - $idle),
-            'waiters' => $waiters,
+            'idle' => $this->idle,
+            'in_use' => max(0, $this->created - $this->idle),
+            'waiters' => $this->waiters,
             'capacity' => $this->maxActive,
         ];
     }
@@ -178,5 +186,30 @@ final class CoroutineConnectionPool
         $this->created++;
 
         return $connection;
+    }
+
+    private function pushConnection(PDO $connection): bool
+    {
+        $deliversToWaiter = $this->waiters > 0;
+
+        if (!$this->channel->push($connection, 0.0)) {
+            $this->created = max(0, $this->created - 1);
+            $this->closeConnection($connection);
+
+            return false;
+        }
+
+        if (!$deliversToWaiter) {
+            $this->idle++;
+        }
+
+        return true;
+    }
+
+    private function decrementIdle(): void
+    {
+        if ($this->idle > 0) {
+            $this->idle--;
+        }
     }
 }
