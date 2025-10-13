@@ -17,7 +17,7 @@ class Bootstrap implements BootstrapInterface
 
     public string $memoryLimit = '512M';
 
-    public int $hookFlags = 0;
+    public int $hookFlags = SWOOLE_HOOK_ALL;
 
     public function bootstrap($app): void
     {
