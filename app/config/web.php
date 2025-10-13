@@ -24,8 +24,8 @@ $config = [
             'username' => getenv('YII_DB_USERNAME') ?: 'root',
             'password' => getenv('YII_DB_PASSWORD') ?: '',
             'charset' => 'utf8mb4',
-            'poolMaxActive' => (int) (getenv('YII_DB_POOL_MAX_ACTIVE') ?: 20),
-            'poolMinActive' => (int) (getenv('YII_DB_POOL_MIN_ACTIVE') ?: 10),
+            'poolMaxActive' => (int) (getenv('YII_DB_POOL_MAX_ACTIVE') ?: 8),
+            'poolMinActive' => (int) (getenv('YII_DB_POOL_MIN_ACTIVE') ?: 2),
             'poolWaitTimeout' => (float) (getenv('YII_DB_POOL_WAIT_TIMEOUT') ?: 5.0),
             // cache schema can improve performance a lot (60%)
             'enableSchemaCache' => true,
