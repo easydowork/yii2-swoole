@@ -36,8 +36,6 @@ class SwooleController extends Controller
      */
     public function actionStart(?string $host = null, ?string $port = null): int
     {
-        $this->stdout("Starting Swoole HTTP server...\n");
-
         $server = $this->resolveServer();
         if ($server === null) {
             return ExitCode::UNSPECIFIED_ERROR;
@@ -64,7 +62,7 @@ class SwooleController extends Controller
             $server->port = $portNumber;
         }
 
-        $this->stdout(sprintf("Listening on %s:%d\n", $server->host, $server->port));
+        $this->stdout(sprintf("Swoole HTTP server listening on %s:%d\n", $server->host, $server->port));
 
         $server->start();
 
