@@ -1,5 +1,7 @@
 <?php
 
+use Dacheng\Yii2\Swoole\Db\CoroutineConnection;
+
 return [
     'bootstrap' => [
         [
@@ -10,6 +12,23 @@ return [
         ],
     ],
     'components' => [
+        'cache' => [
+            'class' => \yii\caching\ArrayCache::class,
+            'serializer' => false,
+        ],
+        'db' => [
+            'class' => CoroutineConnection::class,
+            'dsn' => getenv('YII_DB_DSN') ?: 'mysql:host=127.0.0.1;dbname=yii2swoole',
+            'username' => getenv('YII_DB_USERNAME') ?: 'root',
+            'password' => getenv('YII_DB_PASSWORD') ?: '',
+            'charset' => 'utf8mb4',
+            'poolMaxActive' => (int) (getenv('YII_DB_POOL_MAX_ACTIVE') ?: 8),
+            'poolMinActive' => (int) (getenv('YII_DB_POOL_MIN_ACTIVE') ?: 2),
+            'poolWaitTimeout' => (float) (getenv('YII_DB_POOL_WAIT_TIMEOUT') ?: 5.0),
+            'enableSchemaCache' => true,
+            'schemaCacheDuration' => (int) (getenv('YII_DB_SCHEMA_CACHE_DURATION') ?: 3600),
+            'schemaCache' => 'cache',
+        ],
         'swooleHttpServer' => [
             'class' => \Dacheng\Yii2\Swoole\Server\HttpServer::class,
             'host' => '127.0.0.1',

@@ -1,7 +1,7 @@
 {
   "name": "dacheng-php/yii2-swoole",
   "version": "1.0.0-dev",
-  "description": "Yii2 extension for Swoole coroutines: asynchronous HTTP server, database/Redis connection pools, and more for high-concurrency PHP apps.",
+  "description": "Yii2 Swoole extension: Swoole HTTP server, coroutine connection pools, boost up your yii2 application performance.",
   "keywords": [
     "Yii2",
     "Swoole",

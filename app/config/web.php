@@ -1,9 +1,8 @@
 <?php
 
 use yii\helpers\ArrayHelper;
-use Dacheng\Yii2\Swoole\Db\CoroutineConnection;
 
-$swooleConfig = require __DIR__ . '/swoole.php';
+$commonConfig = require __DIR__ . '/common.php';
 
 $config = [
     'id' => 'yii2-swoole-example',
@@ -13,24 +12,6 @@ $config = [
         'request' => [
             'cookieValidationKey' => 'test-secret-key',
             'enableCsrfValidation' => false, // Disable CSRF for API testing
-        ],
-        'cache' => [
-            'class' => \yii\caching\ArrayCache::class,
-            'serializer' => false,
-        ],
-        'db' => [
-            'class' => CoroutineConnection::class,
-            'dsn' => getenv('YII_DB_DSN') ?: 'mysql:host=127.0.0.1;dbname=yii2swoole',
-            'username' => getenv('YII_DB_USERNAME') ?: 'root',
-            'password' => getenv('YII_DB_PASSWORD') ?: '',
-            'charset' => 'utf8mb4',
-            'poolMaxActive' => (int) (getenv('YII_DB_POOL_MAX_ACTIVE') ?: 8),
-            'poolMinActive' => (int) (getenv('YII_DB_POOL_MIN_ACTIVE') ?: 2),
-            'poolWaitTimeout' => (float) (getenv('YII_DB_POOL_WAIT_TIMEOUT') ?: 5.0),
-            // cache schema can improve performance a lot (60%)
-            'enableSchemaCache' => true,
-            'schemaCacheDuration' => (int) (getenv('YII_DB_SCHEMA_CACHE_DURATION') ?: 3600),
-            'schemaCache' => 'cache',
         ],
         'errorHandler' => [
             'errorAction' => 'site/error',
@@ -60,7 +41,7 @@ $config = [
     'params' => require __DIR__ . '/params.php',
 ];
 
-$config = ArrayHelper::merge($config, $swooleConfig);
+$config = ArrayHelper::merge($commonConfig, $config);
 
 if (YII_ENV_DEV) {
     // configuration adjustments for 'dev' environment when optional packages are present

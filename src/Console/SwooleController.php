@@ -14,17 +14,29 @@ class SwooleController extends Controller
 {
     public string $serverComponent = 'swooleHttpServer';
 
+    /**
+     * @var string watch ',' separated path to hot reload
+     */
+    public $watch;
+
     private ?HttpServer $server = null;
 
     public function options($actionID): array
     {
-        return array_merge(parent::options($actionID), ['serverComponent']);
+        $options = array_merge(parent::options($actionID), ['serverComponent']);
+
+        if ($actionID === 'start') {
+            $options[] = 'watch';
+        }
+
+        return $options;
     }
 
     public function optionAliases(): array
     {
         return array_merge(parent::optionAliases(), [
             'c' => 'serverComponent',
+            'w' => 'watch',
         ]);
     }
 
@@ -39,6 +51,20 @@ class SwooleController extends Controller
         $server = $this->resolveServer();
         if ($server === null) {
             return ExitCode::UNSPECIFIED_ERROR;
+        }
+
+        [$watchEnabled, $watchPaths] = $this->resolveWatchOption();
+
+        if (method_exists($server, 'enableHotReload')) {
+            $server->enableHotReload($watchEnabled, $watchPaths);
+        } else {
+            if (property_exists($server, 'hotReloadEnabled')) {
+                $server->hotReloadEnabled = $watchEnabled;
+            }
+
+            if ($watchPaths !== [] && property_exists($server, 'hotReloadWatchPaths')) {
+                $server->hotReloadWatchPaths = $watchPaths;
+            }
         }
 
         $listenHost = $host ?? $server->host;
@@ -67,6 +93,33 @@ class SwooleController extends Controller
         $server->start();
 
         return ExitCode::OK;
+    }
+
+    private function resolveWatchOption(): array
+    {
+        $option = $this->watch;
+        $enabled = false;
+        $paths = [];
+
+        if (is_bool($option)) {
+            $enabled = $option;
+        } elseif (is_string($option)) {
+            $value = trim($option);
+            if ($value !== '') {
+                $boolValue = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+                if ($boolValue === null) {
+                    $enabled = true;
+                    $paths = array_filter(array_map('trim', explode(',', $value)), static fn($path) => $path !== '');
+                } else {
+                    $enabled = $boolValue;
+                }
+            }
+        } elseif (is_array($option)) {
+            $paths = array_filter(array_map('trim', $option), static fn($path) => $path !== '');
+            $enabled = $paths !== [];
+        }
+
+        return [$enabled, $paths];
     }
 
     /**

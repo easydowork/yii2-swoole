@@ -2,7 +2,7 @@
 
 use yii\helpers\ArrayHelper;
 
-$swooleConfig = require __DIR__ . '/swoole.php';
+$commonConfig = require __DIR__ . '/common.php';
 
 $config = [
     'id' => 'yii2-swoole-console',
@@ -11,9 +11,6 @@ $config = [
     'controllerNamespace' => 'app\commands',
     'controllerMap' => [],
     'components' => [
-        'cache' => [
-            'class' => \yii\caching\DummyCache::class,
-        ],
         'log' => [
             'targets' => [
                 [
@@ -27,4 +24,4 @@ $config = [
     'params' => require __DIR__ . '/params.php',
 ];
 
-return ArrayHelper::merge($config, $swooleConfig);
+return ArrayHelper::merge($commonConfig, $config);

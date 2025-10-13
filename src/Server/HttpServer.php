@@ -28,6 +28,11 @@ class HttpServer extends Component
     public array $settings = [];
 
     /**
+     * @var string|array|HotReloader
+     */
+    public $hotReloader = HotReloader::class;
+
+    /**
      * @var RequestDispatcherInterface|array|string
      */
     public $dispatcher;
@@ -39,6 +44,8 @@ class HttpServer extends Component
 
     private ?SwooleHttpServer $server = null;
 
+    private HotReloader $hotReloaderInstance;
+
     public function init(): void
     {
         parent::init();
@@ -48,6 +55,8 @@ class HttpServer extends Component
         }
 
         $this->dispatcher = Instance::ensure($this->dispatcher, RequestDispatcherInterface::class);
+
+        $this->hotReloaderInstance = Instance::ensure($this->hotReloader, HotReloader::class);
 
         if ($this->serverFactory === null) {
             $this->serverFactory = static function (string $host, int $port): SwooleHttpServer {
@@ -85,6 +94,8 @@ class HttpServer extends Component
         $dispatcher = $this->dispatcher;
         $server = $this->server;
 
+        $this->hotReloaderInstance->start($server);
+
         $this->server->on('request', function (Request $request, Response $response) use ($dispatcher, $server): void {
             try {
                 $dispatcher->dispatch($request, $response, $server);
@@ -106,6 +117,7 @@ class HttpServer extends Component
             $this->server->start();
         } finally {
             $this->server = null;
+            $this->hotReloaderInstance->stop();
             $this->trigger(self::EVENT_AFTER_STOP);
         }
     }
@@ -123,7 +135,14 @@ class HttpServer extends Component
 
         $this->trigger(self::EVENT_BEFORE_STOP);
 
+        $this->hotReloaderInstance->stop();
+
         $this->server->shutdown();
+    }
+
+    public function enableHotReload(bool $enable, array $paths = []): void
+    {
+        $this->hotReloaderInstance->enable($enable, $paths);
     }
 
 }
