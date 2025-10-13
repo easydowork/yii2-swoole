@@ -44,6 +44,7 @@ $config = [
                     'levels' => ['error', 'warning'],
                     'exportInterval' => 1,
                     'logFile' => '@runtime/logs/app.log',
+                    'maxFileSize' => 102400,
                 ],
             ],
         ],
