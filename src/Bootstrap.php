@@ -17,10 +17,12 @@ class Bootstrap implements BootstrapInterface
 
     public string $memoryLimit = '512M';
 
+    public int $hookFlags = 0;
+
     public function bootstrap($app): void
     {
-        if (extension_loaded('swoole') && method_exists(Runtime::class, 'enableCoroutine')) {
-            Runtime::enableCoroutine(SWOOLE_HOOK_ALL);
+        if (extension_loaded('swoole') && method_exists(Runtime::class, 'enableCoroutine') && $this->hookFlags !== 0) {
+            Runtime::enableCoroutine($this->hookFlags);
         }
 
         $memoryLimit = getenv('SWOOLE_MEMORY_LIMIT') ?: $this->memoryLimit;

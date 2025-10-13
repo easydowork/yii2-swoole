@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 namespace Dacheng\Yii2\Swoole\Server;
 
-use Swoole\Coroutine\Http\Server as CoroutineHttpServer;
-use function Swoole\Coroutine\run;
+use Swoole\Http\Server as SwooleHttpServer;
 use Swoole\Http\Request;
 use Swoole\Http\Response;
 use yii\base\Component;
@@ -38,7 +37,7 @@ class HttpServer extends Component
      */
     public $serverFactory;
 
-    private ?CoroutineHttpServer $server = null;
+    private ?SwooleHttpServer $server = null;
 
     public function init(): void
     {
@@ -51,8 +50,8 @@ class HttpServer extends Component
         $this->dispatcher = Instance::ensure($this->dispatcher, RequestDispatcherInterface::class);
 
         if ($this->serverFactory === null) {
-            $this->serverFactory = static function (string $host, int $port): CoroutineHttpServer {
-                return new CoroutineHttpServer($host, $port, false, false);
+            $this->serverFactory = static function (string $host, int $port): SwooleHttpServer {
+                return new SwooleHttpServer($host, $port);
             };
         }
 
@@ -76,46 +75,39 @@ class HttpServer extends Component
 
         $this->trigger(self::EVENT_BEFORE_START);
 
+        $factory = $this->serverFactory;
+        $this->server = $factory($this->host, $this->port);
+
+        if (!empty($this->settings)) {
+            $this->server->set($this->settings);
+        }
+
         $dispatcher = $this->dispatcher;
+        $server = $this->server;
 
-        run(function () use ($dispatcher): void {
-            $factory = $this->serverFactory;
-            $this->server = $factory($this->host, $this->port);
-
-            if (!empty($this->settings)) {
-                $this->server->set($this->settings);
-            }
-
-            $server = $this->server;
-
-            $handler = function (Request $request, Response $response) use ($dispatcher, $server): void {
-                try {
-                    $dispatcher->dispatch($request, $response, $server);
-                } catch (\Throwable $e) {
-                    if (!$response->isWritable()) {
-                        return;
-                    }
-                    
-                    $response->status(500);
-                    $response->header('Content-Type', 'text/plain; charset=UTF-8');
-                    $body = defined('YII_DEBUG') && YII_DEBUG ? (string) $e : 'Internal Server Error';
-                    $response->end($body);
-                }
-            };
-
-            // Register handlers for root and any sub-path
-            $this->server->handle('/', $handler);
-            $this->server->handle('/{path:.*}', $handler);
-
-            $this->trigger(self::EVENT_AFTER_START);
-
+        $this->server->on('request', function (Request $request, Response $response) use ($dispatcher, $server): void {
             try {
-                $this->server->start();
-            } finally {
-                $this->server = null;
-                $this->trigger(self::EVENT_AFTER_STOP);
+                $dispatcher->dispatch($request, $response, $server);
+            } catch (\Throwable $e) {
+                if (method_exists($response, 'isWritable') && !$response->isWritable()) {
+                    return;
+                }
+
+                $response->status(500);
+                $response->header('Content-Type', 'text/plain; charset=UTF-8');
+                $body = defined('YII_DEBUG') && YII_DEBUG ? (string) $e : 'Internal Server Error';
+                $response->end($body);
             }
         });
+
+        $this->trigger(self::EVENT_AFTER_START);
+
+        try {
+            $this->server->start();
+        } finally {
+            $this->server = null;
+            $this->trigger(self::EVENT_AFTER_STOP);
+        }
     }
 
     /**

@@ -6,7 +6,7 @@ namespace Dacheng\Yii2\Swoole\Server;
 
 use Dacheng\Yii2\Swoole\Coroutine\CoroutineApplication;
 use Dacheng\Yii2\Swoole\Db\CoroutineConnection;
-use Swoole\Coroutine\Http\Server as CoroutineHttpServer;
+use Swoole\Http\Server as SwooleHttpServer;
 use Swoole\Http\Request;
 use Swoole\Http\Response;
 use Throwable;
@@ -53,7 +53,7 @@ class RequestDispatcher extends BaseObject implements RequestDispatcherInterface
         }
     }
 
-    public function dispatch(Request $request, Response $response, CoroutineHttpServer $server): void
+    public function dispatch(Request $request, Response $response, SwooleHttpServer $server): void
     {
         $previousApp = Yii::$app instanceof Application ? Yii::$app : null;
         $app = $this->getApplication();
