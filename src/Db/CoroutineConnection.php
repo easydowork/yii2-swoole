@@ -5,13 +5,12 @@ declare(strict_types=1);
 namespace Dacheng\Yii2\Swoole\Db;
 
 use PDO;
+use Swoole\Coroutine\Channel;
 use yii\db\Connection;
 
 class CoroutineConnection extends Connection
 {
     public int $poolMaxActive = 20;
-
-    public int $poolMinActive = 0;
 
     public float $poolWaitTimeout = 3.0;
 
@@ -21,6 +20,11 @@ class CoroutineConnection extends Connection
      * @var array<string, CoroutineConnectionPool>
      */
     private static array $sharedPools = [];
+
+    /**
+     * @var array<string, Channel>
+     */
+    private static array $poolLocks = [];
 
     private ?string $poolKey = null;
 
@@ -78,12 +82,20 @@ class CoroutineConnection extends Connection
         $key = $this->poolKey ??= $this->buildPoolKey();
 
         if (!isset(self::$sharedPools[$key])) {
-            self::$sharedPools[$key] = new CoroutineConnectionPool(
-                fn (): PDO => $this->createPdoForPool(),
-                $this->poolMaxActive,
-                $this->poolMinActive,
-                $this->poolWaitTimeout
-            );
+            $lock = self::$poolLocks[$key] ??= $this->createPoolLock();
+            $token = $lock->pop();
+
+            try {
+                if (!isset(self::$sharedPools[$key])) {
+                    self::$sharedPools[$key] = new CoroutineConnectionPool(
+                        fn (): PDO => $this->createPdoForPool(),
+                        $this->poolMaxActive,
+                        $this->poolWaitTimeout
+                    );
+                }
+            } finally {
+                $lock->push($token);
+            }
         }
 
         return self::$sharedPools[$key];
@@ -119,6 +131,14 @@ class CoroutineConnection extends Connection
     private function isPoolingEnabled(): bool
     {
         return $this->enableCoroutinePooling && \Swoole\Coroutine::getCid() >= 0;
+    }
+
+    private function createPoolLock(): Channel
+    {
+        $lock = new Channel(1);
+        $lock->push(true);
+
+        return $lock;
     }
 
 }
