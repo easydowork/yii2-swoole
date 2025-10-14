@@ -49,13 +49,6 @@ To stop a running server (from another terminal):
 php yii swoole/stop
 ```
 
-Enable hot reload when starting the server by passing `--watch` (optionally with comma separated paths):
-
-```bash
-php yii swoole/start --watch
-php yii swoole/start --watch=@app/runtime,.env
-```
-
 During dispatch the original Swoole request instance is available via `Yii::$app->params['__swooleRequest']`.
 
 ## Development
