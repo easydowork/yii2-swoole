@@ -15,7 +15,7 @@ use yii\redis\SocketException;
  * This pool implementation:
  * - Maintains a pool of reusable socket resources
  * - Uses Swoole channels for lock-free coordination
- * - Supports min/max pool sizes
+ * - Supports max pool sizes
  * - Handles connection creation with retry logic
  * - Provides wait timeout for pool exhaustion scenarios
  */

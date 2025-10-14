@@ -80,16 +80,9 @@ final class CoroutineConnectionPool
         $this->pushConnection($connection);
     }
 
-    /**
-     * @return array{0:?PDO,1:?RuntimeException}
-     */
     private function closeConnection(PDO $connection): void
     {
-        try {
-            $connection = null;
-        } catch (\Throwable $exception) {
-            // ignore disposal errors
-        }
+        $connection = null;
     }
 
     /**
