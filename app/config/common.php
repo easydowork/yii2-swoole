@@ -23,9 +23,7 @@ return [
             'poolWaitTimeout' => (float)(getenv('YII_REDIS_POOL_WAIT_TIMEOUT') ?: 2.0),
         ],
         'cache' => [
-            'class' => \yii\redis\Cache::class,
-            'redis' => 'redis',
-            'keyPrefix' => 'yii2cache:',
+            'class' => \yii\caching\ArrayCache::class,
         ],
         'db' => [
             'class' => \Dacheng\Yii2\Swoole\Db\CoroutineConnection::class,
