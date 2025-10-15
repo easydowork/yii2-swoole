@@ -1,7 +1,5 @@
 <?php
 
-use yii\helpers\ArrayHelper;
-
 $commonConfig = require __DIR__ . '/common.php';
 
 $config = [
@@ -12,6 +10,17 @@ $config = [
         'request' => [
             'cookieValidationKey' => 'test-secret-key',
             'enableCsrfValidation' => false, // Disable CSRF for API testing
+        ],
+        'session' => [
+            'class' => \Dacheng\Yii2\Swoole\Session\CoroutineSession::class,
+            'redis' => 'redis',
+            'keyPrefix' => 'phpsession:',
+            'timeout' => (int)(getenv('YII_SESSION_TIMEOUT') ?: 1440),
+        ],
+        'user' => [
+            'class' => \Dacheng\Yii2\Swoole\User\CoroutineUser::class,
+            'identityClass' => \app\models\UserIdentity::class,
+            'enableAutoLogin' => false,
         ],
         'errorHandler' => [
             'errorAction' => 'site/error',
@@ -41,7 +50,7 @@ $config = [
     'params' => require __DIR__ . '/params.php',
 ];
 
-$config = ArrayHelper::merge($commonConfig, $config);
+$config = \yii\helpers\ArrayHelper::merge($commonConfig, $config);
 
 if (YII_ENV_DEV) {
     // configuration adjustments for 'dev' environment when optional packages are present

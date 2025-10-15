@@ -1,9 +1,5 @@
 <?php
 
-use Dacheng\Yii2\Swoole\Db\CoroutineConnection;
-use Dacheng\Yii2\Swoole\Redis\CoroutineRedisConnection;
-use Dacheng\Yii2\Swoole\User\CoroutineUser;
-
 return [
     'bootstrap' => [
         [
@@ -15,7 +11,7 @@ return [
     ],
     'components' => [
         'redis' => [
-            'class' => CoroutineRedisConnection::class,
+            'class' => \Dacheng\Yii2\Swoole\Redis\CoroutineRedisConnection::class,
             'hostname' => getenv('YII_REDIS_HOST') ?: '127.0.0.1',
             'port' => (int)(getenv('YII_REDIS_PORT') ?: 6379),
             'database' => (int)(getenv('YII_REDIS_DATABASE') ?: 0),
@@ -31,19 +27,8 @@ return [
             'redis' => 'redis',
             'keyPrefix' => 'yii2cache:',
         ],
-        'session' => [
-            'class' => \Dacheng\Yii2\Swoole\Session\CoroutineSession::class,
-            'redis' => 'redis',
-            'keyPrefix' => 'phpsession:',
-            'timeout' => (int)(getenv('YII_SESSION_TIMEOUT') ?: 1440),
-        ],
-        'user' => [
-            'class' => CoroutineUser::class,
-            'identityClass' => \app\models\UserIdentity::class,
-            'enableAutoLogin' => false,
-        ],
         'db' => [
-            'class' => CoroutineConnection::class,
+            'class' => \Dacheng\Yii2\Swoole\Db\CoroutineConnection::class,
             'dsn' => getenv('YII_DB_DSN') ?: 'mysql:host=127.0.0.1;dbname=yii2swoole',
             'username' => getenv('YII_DB_USERNAME') ?: 'root',
             'password' => getenv('YII_DB_PASSWORD') ?: '',
