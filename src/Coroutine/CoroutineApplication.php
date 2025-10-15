@@ -75,6 +75,11 @@ class CoroutineApplication extends Application
         }
 
         $store = $this->getCoroutineComponentStore();
+        $userComponent = $store['user'] ?? null;
+        if (is_object($userComponent) && method_exists($userComponent, 'reset')) {
+            $userComponent->reset();
+            unset($store['user']);
+        }
         foreach ($store as $id => $component) {
             if (!is_object($component)) {
                 continue;

@@ -2,6 +2,7 @@
 
 use Dacheng\Yii2\Swoole\Db\CoroutineConnection;
 use Dacheng\Yii2\Swoole\Redis\CoroutineRedisConnection;
+use Dacheng\Yii2\Swoole\User\CoroutineUser;
 
 return [
     'bootstrap' => [
@@ -35,6 +36,11 @@ return [
             'redis' => 'redis',
             'keyPrefix' => 'phpsession:',
             'timeout' => (int)(getenv('YII_SESSION_TIMEOUT') ?: 1440),
+        ],
+        'user' => [
+            'class' => CoroutineUser::class,
+            'identityClass' => \app\models\UserIdentity::class,
+            'enableAutoLogin' => false,
         ],
         'db' => [
             'class' => CoroutineConnection::class,
