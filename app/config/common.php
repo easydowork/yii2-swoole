@@ -28,6 +28,13 @@ return [
         'cache' => [
             'class' => \yii\redis\Cache::class,
             'redis' => 'redis',
+            'keyPrefix' => 'yii2cache:',
+        ],
+        'session' => [
+            'class' => \Dacheng\Yii2\Swoole\Session\CoroutineSession::class,
+            'redis' => 'redis',
+            'keyPrefix' => 'phpsession:',
+            'timeout' => (int)(getenv('YII_SESSION_TIMEOUT') ?: 1440),
         ],
         'db' => [
             'class' => CoroutineConnection::class,
