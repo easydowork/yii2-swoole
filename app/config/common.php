@@ -19,7 +19,7 @@ return [
             'socketClientFlags' => STREAM_CLIENT_CONNECT,
             'connectionTimeout' => 1.0,
             'dataTimeout' => 1.0,
-            'poolMaxActive' => (int)(getenv('YII_REDIS_POOL_MAX_ACTIVE') ?: 8),
+            'poolMaxActive' => (int)(getenv('YII_REDIS_POOL_MAX_ACTIVE') ?: 4),
             'poolWaitTimeout' => (float)(getenv('YII_REDIS_POOL_WAIT_TIMEOUT') ?: 2.0),
         ],
         'cache' => [
@@ -31,7 +31,7 @@ return [
             'username' => getenv('YII_DB_USERNAME') ?: 'root',
             'password' => getenv('YII_DB_PASSWORD') ?: '',
             'charset' => 'utf8mb4',
-            'poolMaxActive' => (int)(getenv('YII_DB_POOL_MAX_ACTIVE') ?: 4),
+            'poolMaxActive' => (int)(getenv('YII_DB_POOL_MAX_ACTIVE') ?: 2),
             'poolWaitTimeout' => (float)(getenv('YII_DB_POOL_WAIT_TIMEOUT') ?: 5.0),
             'enableSchemaCache' => true,
             'schemaCacheDuration' => (int)(getenv('YII_DB_SCHEMA_CACHE_DURATION') ?: 3600),
