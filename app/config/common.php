@@ -62,6 +62,17 @@ return [
                 'log_file' => 'runtime/logs/swoole.log',
             ],
             'dispatcher' => new \Dacheng\Yii2\Swoole\Server\RequestDispatcher(__DIR__ . '/web.php'),
+            'onWorkerStart' => function () {
+                $redis = \Yii::$app->get('redis', false);
+                if ($redis instanceof \Dacheng\Yii2\Swoole\Redis\CoroutineRedisConnection) {
+                    $redis->getPoolStats();
+                }
+
+                $db = \Yii::$app->get('db', false);
+                if ($db instanceof \Dacheng\Yii2\Swoole\Db\CoroutineConnection) {
+                    $db->getPool();
+                }
+            },
         ],
     ],
 ];

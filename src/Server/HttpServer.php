@@ -21,6 +21,12 @@ class HttpServer extends Component
 
     public const EVENT_AFTER_STOP = 'afterStop';
 
+    public const EVENT_WORKER_START = 'workerStart';
+
+    public const EVENT_WORKER_STOP = 'workerStop';
+
+    public const EVENT_WORKER_EXIT = 'workerExit';
+
     public string $host = '127.0.0.1';
 
     public int $port = 9501;
@@ -36,6 +42,21 @@ class HttpServer extends Component
      * @var callable|null
      */
     public $serverFactory;
+
+    /**
+     * @var callable|null
+     */
+    public $onWorkerStart;
+
+    /**
+     * @var callable|null
+     */
+    public $onWorkerStop;
+
+    /**
+     * @var callable|null
+     */
+    public $onWorkerExit;
 
     private ?SwooleHttpServer $server = null;
 
@@ -58,6 +79,7 @@ class HttpServer extends Component
         if (!is_callable($this->serverFactory)) {
             throw new InvalidConfigException('Property "serverFactory" must be a valid callable.');
         }
+
     }
 
     /**
@@ -84,6 +106,39 @@ class HttpServer extends Component
 
         $dispatcher = $this->dispatcher;
         $server = $this->server;
+
+        $this->server->on('workerStart', function (SwooleHttpServer $server, int $workerId): void {
+            $this->trigger(self::EVENT_WORKER_START, new WorkerEvent([
+                'server' => $server,
+                'workerId' => $workerId,
+            ]));
+
+            if ($this->onWorkerStart) {
+                ($this->onWorkerStart)($server, $workerId);
+            }
+        });
+
+        $this->server->on('workerStop', function (SwooleHttpServer $server, int $workerId): void {
+            $this->trigger(self::EVENT_WORKER_STOP, new WorkerEvent([
+                'server' => $server,
+                'workerId' => $workerId,
+            ]));
+
+            if ($this->onWorkerStop) {
+                ($this->onWorkerStop)($server, $workerId);
+            }
+        });
+
+        $this->server->on('workerExit', function (SwooleHttpServer $server, int $workerId): void {
+            $this->trigger(self::EVENT_WORKER_EXIT, new WorkerEvent([
+                'server' => $server,
+                'workerId' => $workerId,
+            ]));
+
+            if ($this->onWorkerExit) {
+                ($this->onWorkerExit)($server, $workerId);
+            }
+        });
 
         $this->server->on('request', function (Request $request, Response $response) use ($dispatcher, $server): void {
             try {

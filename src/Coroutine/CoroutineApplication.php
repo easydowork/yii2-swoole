@@ -24,6 +24,34 @@ class CoroutineApplication extends Application
         'log',
     ];
 
+    public function __get($name)
+    {
+        if ($this->isCoroutineContext() && !$this->isSharedComponent($name)) {
+            $store = $this->getCoroutineComponentStore();
+            if (array_key_exists($name, $store)) {
+                return $store[$name];
+            }
+
+            return $this->get($name, false);
+        }
+
+        return parent::__get($name);
+    }
+
+    public function __isset($name)
+    {
+        if ($this->isCoroutineContext() && !$this->isSharedComponent($name)) {
+            $store = $this->getCoroutineComponentStore();
+            if (array_key_exists($name, $store)) {
+                return $store[$name] !== null;
+            }
+
+            return $this->has($name);
+        }
+
+        return parent::__isset($name);
+    }
+
     /**
      * @inheritdoc
      */
