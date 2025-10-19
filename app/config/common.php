@@ -26,7 +26,7 @@ return [
             'class' => \yii\caching\ArrayCache::class,
         ],
         'db' => [
-            'class' => \Dacheng\Yii2\Swoole\Db\CoroutineConnection::class,
+            'class' => \Dacheng\Yii2\Swoole\Db\CoroutineDbConnection::class,
             'dsn' => getenv('YII_DB_DSN') ?: 'mysql:host=127.0.0.1;dbname=yii2swoole',
             'username' => getenv('YII_DB_USERNAME') ?: 'root',
             'password' => getenv('YII_DB_PASSWORD') ?: '',
@@ -67,7 +67,7 @@ return [
                 }
 
                 $db = \Yii::$app->get('db', false);
-                if ($db instanceof \Dacheng\Yii2\Swoole\Db\CoroutineConnection) {
+                if ($db instanceof \Dacheng\Yii2\Swoole\Db\CoroutineDbConnection) {
                     $db->getPool();
                 }
             },

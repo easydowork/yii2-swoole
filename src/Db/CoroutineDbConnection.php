@@ -8,7 +8,7 @@ use PDO;
 use Swoole\Coroutine\Channel;
 use yii\db\Connection;
 
-class CoroutineConnection extends Connection
+class CoroutineDbConnection extends Connection
 {
     public int $poolMaxActive = 20;
 
