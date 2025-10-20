@@ -23,6 +23,14 @@ class CoroutineApplication extends Application
         'i18n',
         'log',
     ];
+    
+    /**
+     * @var string[] component IDs that should not be cleared during context reset.
+     * These components may have state that should persist across requests.
+     */
+    protected array $persistentComponentIds = [
+        'queue', // Queue jobs should persist across HTTP requests
+    ];
 
     public function __get($name)
     {
@@ -112,6 +120,11 @@ class CoroutineApplication extends Application
             if (!is_object($component)) {
                 continue;
             }
+            
+            // Skip persistent components that should not be cleared
+            if ($this->isPersistentComponent($id)) {
+                continue;
+            }
 
             if (method_exists($component, 'close')) {
                 $component->close();
@@ -139,6 +152,11 @@ class CoroutineApplication extends Application
     protected function isSharedComponent(string $id): bool
     {
         return in_array($id, $this->sharedComponentIds, true);
+    }
+    
+    protected function isPersistentComponent(string $id): bool
+    {
+        return in_array($id, $this->persistentComponentIds, true);
     }
 
     protected function isCoroutineContext(): bool

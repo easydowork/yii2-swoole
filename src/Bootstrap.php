@@ -21,10 +21,6 @@ class Bootstrap implements BootstrapInterface
 
     public function bootstrap($app): void
     {
-        if (extension_loaded('swoole') && method_exists(Runtime::class, 'enableCoroutine') && $this->hookFlags !== 0) {
-            Runtime::enableCoroutine($this->hookFlags);
-        }
-
         $memoryLimit = getenv('SWOOLE_MEMORY_LIMIT') ?: $this->memoryLimit;
         if ($memoryLimit !== '' && function_exists('ini_set')) {
             ini_set('memory_limit', $memoryLimit);

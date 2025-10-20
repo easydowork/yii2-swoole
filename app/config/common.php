@@ -8,6 +8,7 @@ return [
             'memoryLimit' => '2G',
             'hookFlags' => SWOOLE_HOOK_ALL,
         ],
+        'queue',
     ],
     'components' => [
         'redis' => [
@@ -24,6 +25,23 @@ return [
         ],
         'cache' => [
             'class' => \yii\caching\ArrayCache::class,
+        ],
+        'queue' => [
+            'class' => \Dacheng\Yii2\Swoole\Queue\CoroutineRedisQueue::class,
+            'redis' => 'redis', // Reference to redis component
+            'channel' => 'queue', // Redis key prefix for queue data
+            
+            // Concurrency settings:
+            // - Set to 1 for serial processing (safe, compatible with all job types)
+            // - Set to 10-50 for I/O intensive jobs (database queries, API calls, file operations)
+            // - Set to 100+ for lightweight jobs with minimal processing
+            // Note: Each concurrent worker runs in a separate coroutine
+            'concurrency' => (int)(getenv('YII_QUEUE_CONCURRENCY') ?: 10),
+            
+            // Inline execution (recommended for coroutine context):
+            // - true: Execute jobs in the same process (faster, lower overhead)
+            // - false: Fork child processes for each job (slower, better isolation)
+            'executeInline' => true,
         ],
         'db' => [
             'class' => \Dacheng\Yii2\Swoole\Db\CoroutineDbConnection::class,
