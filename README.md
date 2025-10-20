@@ -1,6 +1,8 @@
 # yii2-swoole
 
-Yii2 extension for Swoole coroutines: asynchronous HTTP server, database/Redis connection pools, and more for high-concurrency PHP apps.
+Yii2 extension for Swoole coroutines: single-process asynchronous HTTP server, database/Redis connection pools, and more for high-concurrency PHP apps.
+
+**Architecture**: Uses Swoole Coroutine HTTP Server for single-process execution with coroutine-based concurrency.
 
 ## Installation
 
@@ -27,9 +29,11 @@ return [
             'host' => '0.0.0.0',
             'port' => 9501,
             'settings' => [
-                'worker_num' => 4,
-                'enable_coroutine' => true,
-                'max_coroutine' => 3000,
+                // Single-process coroutine server settings
+                'open_tcp_nodelay' => true,
+                'tcp_fastopen' => true,
+                'max_coroutine' => 100000,
+                'log_level' => SWOOLE_LOG_WARNING,
             ],
             'dispatcher' => new \Dacheng\Yii2\Swoole\Server\RequestDispatcher(__DIR__ . '/web.php'),
         ],

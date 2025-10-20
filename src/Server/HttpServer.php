@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Dacheng\Yii2\Swoole\Server;
 
-use Swoole\Http\Server as SwooleHttpServer;
+use Swoole\Coroutine;
+use Swoole\Coroutine\Http\Server as SwooleCoroutineHttpServer;
 use Swoole\Http\Request;
 use Swoole\Http\Response;
 use yii\base\Component;
@@ -20,12 +21,6 @@ class HttpServer extends Component
     public const EVENT_BEFORE_STOP = 'beforeStop';
 
     public const EVENT_AFTER_STOP = 'afterStop';
-
-    public const EVENT_WORKER_START = 'workerStart';
-
-    public const EVENT_WORKER_STOP = 'workerStop';
-
-    public const EVENT_WORKER_EXIT = 'workerExit';
 
     public string $host = '127.0.0.1';
 
@@ -43,22 +38,9 @@ class HttpServer extends Component
      */
     public $serverFactory;
 
-    /**
-     * @var callable|null
-     */
-    public $onWorkerStart;
+    private ?SwooleCoroutineHttpServer $server = null;
 
-    /**
-     * @var callable|null
-     */
-    public $onWorkerStop;
-
-    /**
-     * @var callable|null
-     */
-    public $onWorkerExit;
-
-    private ?SwooleHttpServer $server = null;
+    private bool $isRunning = false;
 
     public function init(): void
     {
@@ -71,8 +53,8 @@ class HttpServer extends Component
         $this->dispatcher = Instance::ensure($this->dispatcher, RequestDispatcherInterface::class);
 
         if ($this->serverFactory === null) {
-            $this->serverFactory = static function (string $host, int $port): SwooleHttpServer {
-                return new SwooleHttpServer($host, $port);
+            $this->serverFactory = static function (string $host, int $port): SwooleCoroutineHttpServer {
+                return new SwooleCoroutineHttpServer($host, $port, false, true);
             };
         }
 
@@ -83,96 +65,93 @@ class HttpServer extends Component
     }
 
     /**
-     * Starts swoole http server.
+     * Starts swoole coroutine http server.
      *
      * This triggers events: beforeStart, afterStart, afterStop.
-     * This bootstraps a main coroutine through `run()`, and runs http server inside it.
+     * This runs in a single process using coroutines for concurrency.
      * This delegates swoole request to yii2 request through Dispatcher.
      */
     public function start(): void
     {
-        if ($this->server !== null) {
+        if ($this->isRunning) {
             return;
         }
 
         $this->trigger(self::EVENT_BEFORE_START);
 
-        $factory = $this->serverFactory;
-        $this->server = $factory($this->host, $this->port);
-
-        if (!empty($this->settings)) {
-            $this->server->set($this->settings);
-        }
+        // Set coroutine configuration
+        Coroutine::set([
+            'hook_flags' => SWOOLE_HOOK_ALL,
+            'max_coroutine' => $this->settings['max_coroutine'] ?? 100000,
+            'log_level' => $this->settings['log_level'] ?? SWOOLE_LOG_WARNING,
+        ]);
 
         $dispatcher = $this->dispatcher;
-        $server = $this->server;
-
-        $this->server->on('workerStart', function (SwooleHttpServer $server, int $workerId): void {
-            $this->trigger(self::EVENT_WORKER_START, new WorkerEvent([
-                'server' => $server,
-                'workerId' => $workerId,
-            ]));
-
-            if ($this->onWorkerStart) {
-                ($this->onWorkerStart)($server, $workerId);
-            }
-        });
-
-        $this->server->on('workerStop', function (SwooleHttpServer $server, int $workerId): void {
-            $this->trigger(self::EVENT_WORKER_STOP, new WorkerEvent([
-                'server' => $server,
-                'workerId' => $workerId,
-            ]));
-
-            if ($this->onWorkerStop) {
-                ($this->onWorkerStop)($server, $workerId);
-            }
-        });
-
-        $this->server->on('workerExit', function (SwooleHttpServer $server, int $workerId): void {
-            $this->trigger(self::EVENT_WORKER_EXIT, new WorkerEvent([
-                'server' => $server,
-                'workerId' => $workerId,
-            ]));
-
-            if ($this->onWorkerExit) {
-                ($this->onWorkerExit)($server, $workerId);
-            }
-        });
-
-        $this->server->on('request', function (Request $request, Response $response) use ($dispatcher, $server): void {
-            try {
-                $dispatcher->dispatch($request, $response, $server);
-            } catch (\Throwable $e) {
-                if (method_exists($response, 'isWritable') && !$response->isWritable()) {
-                    return;
-                }
-
-                $response->status(500);
-                $response->header('Content-Type', 'text/plain; charset=UTF-8');
-                $body = defined('YII_DEBUG') && YII_DEBUG ? (string) $e : 'Internal Server Error';
-                $response->end($body);
-            }
-        });
-
-        $this->trigger(self::EVENT_AFTER_START);
-
-        try {
-            $this->server->start();
-        } finally {
+        $host = $this->host;
+        $port = $this->port;
+        $settings = $this->settings;
+        $factory = $this->serverFactory;
+        $afterStartEvent = function () {
+            $this->trigger(self::EVENT_AFTER_START);
+        };
+        $afterStopEvent = function () {
+            $this->isRunning = false;
             $this->server = null;
             $this->trigger(self::EVENT_AFTER_STOP);
-        }
+        };
+
+        $this->isRunning = true;
+
+        Coroutine\run(function () use ($factory, $host, $port, $settings, $dispatcher, $afterStartEvent, $afterStopEvent): void {
+            $this->server = $factory($host, $port);
+
+            // Apply relevant settings for coroutine server
+            $coroutineSettings = [];
+            if (isset($settings['open_tcp_nodelay'])) {
+                $coroutineSettings['open_tcp_nodelay'] = $settings['open_tcp_nodelay'];
+            }
+            if (isset($settings['tcp_fastopen'])) {
+                $coroutineSettings['open_tcp_fastopen'] = $settings['tcp_fastopen'];
+            }
+            if (!empty($coroutineSettings)) {
+                $this->server->set($coroutineSettings);
+            }
+
+            $server = $this->server;
+
+            $afterStartEvent();
+
+            $this->server->handle('/', function (Request $request, Response $response) use ($dispatcher, $server): void {
+                try {
+                    $dispatcher->dispatch($request, $response, $server);
+                } catch (\Throwable $e) {
+                    if (method_exists($response, 'isWritable') && !$response->isWritable()) {
+                        return;
+                    }
+
+                    $response->status(500);
+                    $response->header('Content-Type', 'text/plain; charset=UTF-8');
+                    $body = defined('YII_DEBUG') && YII_DEBUG ? (string) $e : 'Internal Server Error';
+                    $response->end($body);
+                }
+            });
+
+            try {
+                $this->server->start();
+            } finally {
+                $afterStopEvent();
+            }
+        });
     }
 
     /**
-     * Stops swoole http server.
+     * Stops swoole coroutine http server.
      *
      * This triggers event: beforeStop.
      */
     public function stop(): void
     {
-        if ($this->server === null) {
+        if (!$this->isRunning || $this->server === null) {
             return;
         }
 
