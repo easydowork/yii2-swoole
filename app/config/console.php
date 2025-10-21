@@ -12,12 +12,24 @@ $config = [
     'controllerMap' => [],
     'components' => [
         'log' => [
+            'traceLevel' => YII_DEBUG ? 3 : 0,
+            'flushInterval' => 1,
             'targets' => [
                 [
-                    'class' => 'yii\\log\\FileTarget',
+                    'class' => \Dacheng\Yii2\Swoole\Log\CoroutineFileTarget::class,
                     'levels' => ['error', 'warning', 'info'],
                     'exportInterval' => 1,
-                    'logFile' => '@runtime/logs/app.log',
+                    'logFile' => '@runtime/logs/console.log',
+                    'channelSize' => (int)(getenv('YII_LOG_CHANNEL_SIZE') ?: 10000),
+                    'pushTimeout' => 0.5,
+                    'batchSize' => 1000, // Packets per batch write
+                    'maxFileSize' => 10240, // 10MB
+                    'maxLogFiles' => 5,
+                    'enableRotation' => true,
+                    'categories' => [],
+                    'except' => [],
+                    'logVars' => [],
+                    'microtime' => true,
                 ],
             ],
         ],
