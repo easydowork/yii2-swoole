@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Dacheng\Yii2\Swoole\Queue;
 
 use Swoole\Coroutine;
-use Swoole\Process;
 use yii\console\Exception;
 use yii\queue\cli\Command as CliCommand;
 use yii\queue\cli\InfoAction;
@@ -13,8 +12,8 @@ use yii\queue\cli\InfoAction;
 /**
  * Manages application coroutine redis-queue with Swoole support.
  * 
- * This command class provides queue management with Swoole coroutine support.
- * The listen action runs in a Swoole process with coroutines enabled.
+ * This command relies on CoroutineApplication to provide the coroutine environment.
+ * When run via the console entry point, coroutines are automatically enabled.
  */
 class CoroutineRedisCommand extends CliCommand
 {
@@ -65,7 +64,8 @@ class CoroutineRedisCommand extends CliCommand
     public function actionRun()
     {
         $this->stdout("Processing all waiting jobs...\n");
-        $result = $this->runInCoroutine(false, 0);
+        $this->printCoroutineInfo();
+        $result = $this->queue->run(false, 0);
         $this->stdout("All jobs processed.\n");
         return $result;
     }
@@ -73,8 +73,8 @@ class CoroutineRedisCommand extends CliCommand
     /**
      * Listens redis-queue and runs new jobs with Swoole coroutine support.
      * 
-     * This action runs in a Swoole coroutine context, enabling efficient
-     * concurrent job processing with connection pooling.
+     * This action runs in a Swoole coroutine context (provided by CoroutineApplication),
+     * enabling efficient concurrent job processing with connection pooling.
      *
      * @param int $timeout number of seconds to wait for a job.
      * @throws Exception when params are invalid.
@@ -92,44 +92,35 @@ class CoroutineRedisCommand extends CliCommand
         $this->stdout("========================================\n");
         $this->stdout("Queue Worker Configuration\n");
         $this->stdout("========================================\n");
-        $this->stdout("Swoole coroutine support: ENABLED\n");
+        $this->printCoroutineInfo();
         $this->stdout("Concurrency level: {$this->queue->concurrency}\n");
         $this->stdout("Execute inline: " . ($this->queue->executeInline ? 'YES' : 'NO') . "\n");
         $this->stdout("Timeout: {$timeout}s\n");
         $this->stdout("========================================\n\n");
         $this->stdout("Listening for jobs...\n\n");
 
-        return $this->runInCoroutine(true, $timeout);
+        return $this->queue->run(true, $timeout);
     }
     
     /**
-     * Runs the queue worker inside a coroutine context.
-     * 
-     * This ensures all Swoole-hooked functions work correctly.
-     *
-     * @param bool $repeat whether to continue listening when queue is empty.
-     * @param int $timeout number of seconds to wait for next message.
-     * @return null|int exit code.
+     * Prints coroutine environment information
      */
-    protected function runInCoroutine($repeat, $timeout = 0)
+    protected function printCoroutineInfo(): void
     {
         if (!extension_loaded('swoole')) {
-            // Fallback to non-coroutine mode if Swoole is not available
-            return $this->queue->run($repeat, $timeout);
+            $this->stdout("Swoole support: NOT AVAILABLE (running in standard mode)\n");
+            return;
         }
+
+        $cid = Coroutine::getCid();
         
-        // Ensure coroutine hooks are enabled (enableCoroutine only takes 1 parameter: flags)
-        \Swoole\Runtime::enableCoroutine(SWOOLE_HOOK_ALL);
-        
-        $exitCode = null;
-        
-        // Run the queue worker in a coroutine
-        \Swoole\Coroutine\run(function () use ($repeat, $timeout, &$exitCode) {
-            $this->stdout("Coroutine started (ID: " . Coroutine::getCid() . ")\n");
-            $exitCode = $this->queue->run($repeat, $timeout);
-        });
-        
-        return $exitCode;
+        if ($cid > 0) {
+            $stats = Coroutine::stats();
+            $this->stdout("Swoole coroutine: ENABLED (ID: {$cid})\n");
+            $this->stdout("Active coroutines: {$stats['coroutine_num']}\n");
+        } else {
+            $this->stdout("Swoole coroutine: AVAILABLE (not in coroutine context)\n");
+        }
     }
 
     /**
