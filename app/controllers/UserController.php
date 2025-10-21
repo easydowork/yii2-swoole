@@ -1,9 +1,9 @@
 <?php
 
-namespace app\controllers;
+namespace dacheng\app\controllers;
 
-use app\models\User;
-use app\models\UserIdentity;
+use dacheng\app\models\User;
+use dacheng\app\models\UserIdentity;
 use Swoole\Coroutine;
 use Yii;
 use yii\web\Controller;

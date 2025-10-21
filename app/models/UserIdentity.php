@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace app\models;
+namespace dacheng\app\models;
 
 use yii\web\IdentityInterface;
 

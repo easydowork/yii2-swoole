@@ -1,8 +1,8 @@
 <?php
 
-namespace app\controllers;
+namespace dacheng\app\controllers;
 
-use app\jobs\ExampleJob;
+use dacheng\app\jobs\ExampleJob;
 use Yii;
 use yii\web\Controller;
 use yii\web\Response;

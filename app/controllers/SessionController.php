@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace app\controllers;
+namespace dacheng\app\controllers;
 
 use Swoole\Coroutine;
 use Yii;
