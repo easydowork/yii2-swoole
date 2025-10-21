@@ -1,7 +1,7 @@
 {
   "name": "dacheng-php/yii2-swoole",
   "version": "1.0.0-dev",
-  "description": "Yii2 Swoole extension: Swoole HTTP server, coroutine connection pools, boost up your yii2 application performance.",
+  "description": "Swoole coroutine integration for Yii2: single-process HTTP server with connection pools, async queue workers, and coroutine-safe component wrappers",
   "keywords": [
     "Yii2",
     "Swoole",
@@ -14,11 +14,11 @@
   "require": {
     "php": ">=8.1",
     "ext-pdo": "*",
-    "ext-swoole": "^6.0"
+    "ext-swoole": "^6.0",
+    "yiisoft/yii2": "^2.0"
   },
   "require-dev": {
     "swoole/ide-helper": "6.0.2",
-    "yiisoft/yii2": "^2.0",
     "yiisoft/yii2-queue": "^2.0",
     "yiisoft/yii2-redis": "^2.0",
     "yidas/yii2-composer-bower-skip": "2.0.13"
