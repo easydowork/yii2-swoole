@@ -159,10 +159,50 @@ final class CoroutineRedisConnectionPool
 
     private function drainPool(): void
     {
-        while (($connection = $this->channel->pop(0.0)) !== false) {
-            if ($connection !== null) {
-                $this->closeConnection($connection);
+        // Get current pool size to avoid infinite loop
+        try {
+            $stats = $this->channel->stats();
+            $count = $stats['queue_num'] ?? 0;
+        } catch (\Throwable $e) {
+            return;
+        }
+        
+        // Pop only the known number of connections with timeout
+        for ($i = 0; $i < $count; $i++) {
+            $connection = $this->channel->pop(0.01);
+            
+            if ($connection === false) {
+                break;
             }
+            
+            if ($connection !== null) {
+                try {
+                    $this->closeConnection($connection);
+                } catch (\Throwable $e) {
+                    // Silently handle close errors
+                }
+            }
+        }
+    }
+
+    /**
+     * Gracefully shuts down the connection pool
+     * Closes all connections and the channel
+     */
+    public function shutdown(): void
+    {
+        // Drain all connections from the pool
+        try {
+            $this->drainPool();
+        } catch (\Throwable $e) {
+            // Silently handle drain errors
+        }
+        
+        // Close the channel
+        try {
+            $this->channel->close();
+        } catch (\Throwable $e) {
+            // Silently handle channel close errors
         }
     }
 }

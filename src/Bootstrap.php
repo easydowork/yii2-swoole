@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Dacheng\Yii2\Swoole;
 
-use Swoole\Runtime;
 use Yii;
 use yii\base\BootstrapInterface;
 use yii\base\InvalidConfigException;

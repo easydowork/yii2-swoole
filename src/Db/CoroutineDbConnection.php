@@ -141,4 +141,21 @@ class CoroutineDbConnection extends Connection
         return $lock;
     }
 
+    /**
+     * Shuts down all connection pools
+     * This should be called during application shutdown
+     */
+    public static function shutdownAllPools(): void
+    {
+        foreach (self::$sharedPools as $pool) {
+            try {
+                $pool->shutdown();
+            } catch (\Throwable $e) {
+                // Silently handle shutdown errors
+            }
+        }
+        
+        self::$sharedPools = [];
+        self::$poolLocks = [];
+    }
 }

@@ -443,4 +443,22 @@ class CoroutineRedisConnection extends BaseRedisConnection
         unset($pool[$this->connectionString]);
         $property->setValue($this, $pool);
     }
+
+    /**
+     * Shuts down all connection pools
+     * This should be called during application shutdown
+     */
+    public static function shutdownAllPools(): void
+    {
+        foreach (self::$sharedPools as $pool) {
+            try {
+                $pool->shutdown();
+            } catch (\Throwable $e) {
+                // Silently handle shutdown errors
+            }
+        }
+        
+        self::$sharedPools = [];
+        self::$poolLocks = [];
+    }
 }

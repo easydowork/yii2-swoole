@@ -94,16 +94,19 @@ class LogWorker
 
         $this->running = false;
 
-        // Try to send stop signal to wake up the worker
-        if ($this->channel !== null && !$this->channel->isFull() && !$this->channel->isClosed()) {
-            $this->channel->push(['__stop__' => true], self::STOP_SIGNAL_TIMEOUT);
+        // Close channel immediately to wake up blocked pop()
+        try {
+            if ($this->channel !== null) {
+                $stats = @$this->channel->stats();
+                if ($stats !== false) {
+                    $this->channel->close();
+                }
+            }
+        } catch (\Throwable $e) {
+            // Silently handle channel close errors
         }
 
-        // Wait for the worker coroutine to finish
-        if ($this->coroutineId !== null) {
-            Coroutine::sleep(self::STOP_WAIT_TIMEOUT);
-            $this->coroutineId = null;
-        }
+        $this->coroutineId = null;
     }
 
     /**
@@ -122,8 +125,12 @@ class LogWorker
             $packet = $this->channel->pop(self::WAIT_TIMEOUT);
 
             if ($packet === false) {
-                // Timeout, continue loop
-                continue;
+                // Timeout or channel closed - check if channel is closed
+                $stats = @$this->channel->stats();
+                if ($stats === false) {
+                    break;  // Channel closed, exit
+                }
+                continue;  // Just timeout, continue loop
             }
 
             // Check for stop signal

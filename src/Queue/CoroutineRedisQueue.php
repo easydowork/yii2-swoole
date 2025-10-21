@@ -48,6 +48,13 @@ class CoroutineRedisQueue extends CliQueue implements StatisticsProviderInterfac
     public $commandClass = CoroutineRedisCommand::class;
     
     /**
+     * @var array Loop configuration. Use CoroutineLoop to avoid signal handling conflicts.
+     * The default SignalLoop uses pcntl_signal() which conflicts with Swoole's Process::signal().
+     * We handle signals in CoroutineRedisCommand instead.
+     */
+    public $loopConfig = ['class' => CoroutineLoop::class];
+    
+    /**
      * @var bool Whether to execute jobs in the same process (faster) or fork child processes (more isolated).
      * Default is true for better performance in coroutine context.
      */
@@ -62,12 +69,41 @@ class CoroutineRedisQueue extends CliQueue implements StatisticsProviderInterfac
     public $concurrency = 10;
 
     /**
+     * @var callable|null Callback that returns true if shutdown is requested
+     */
+    private $shutdownCallback = null;
+
+    /**
      * @inheritdoc
      */
     public function init()
     {
         parent::init();
         $this->redis = Instance::ensure($this->redis, Connection::class);
+    }
+
+    /**
+     * Sets a callback to check if shutdown is requested
+     * 
+     * @param callable $callback Callback that returns true if shutdown is requested
+     */
+    public function setShutdownCallback(callable $callback): void
+    {
+        $this->shutdownCallback = $callback;
+    }
+
+    /**
+     * Checks if shutdown has been requested
+     * 
+     * @return bool
+     */
+    protected function isShutdownRequested(): bool
+    {
+        if ($this->shutdownCallback === null) {
+            return false;
+        }
+        
+        return (bool) call_user_func($this->shutdownCallback);
     }
 
     /**
@@ -89,13 +125,19 @@ class CoroutineRedisQueue extends CliQueue implements StatisticsProviderInterfac
         }
         
         // Fallback to serial processing
+        \Yii::info("Using serial processing mode (concurrency={$this->concurrency})", __METHOD__);
+        
         return $this->runWorker(function (callable $canContinue) use ($repeat, $timeout) {
             // Open connection once for the entire worker session
             $this->redis->open();
             
             try {
                 $jobCount = 0;
-                while ($canContinue()) {
+                $startTime = microtime(true);
+                
+                \Yii::info("Serial worker loop starting", __METHOD__);
+                
+                while ($canContinue() && !$this->isShutdownRequested()) {
                     try {
                         if (($payload = $this->reserve($timeout)) !== null) {
                             list($id, $message, $ttr, $attempt) = $payload;
@@ -104,6 +146,15 @@ class CoroutineRedisQueue extends CliQueue implements StatisticsProviderInterfac
                             }
                             $jobCount++;
                         } elseif (!$repeat) {
+                            break;
+                        }
+                        
+                        // Check for shutdown after each job
+                        if ($this->isShutdownRequested()) {
+                            $duration = round(microtime(true) - $startTime, 2);
+                            $rate = $duration > 0 ? round($jobCount / $duration, 2) : 0;
+                            \Yii::info("Shutdown requested, stopping worker after current job. Processed {$jobCount} jobs in {$duration}s ({$rate} jobs/s)", __METHOD__);
+                            error_log("[Queue] Breaking from serial worker loop due to shutdown");
                             break;
                         }
                     } catch (\yii\redis\SocketException $e) {
@@ -117,9 +168,12 @@ class CoroutineRedisQueue extends CliQueue implements StatisticsProviderInterfac
                         }
                     }
                 }
+                
+                error_log("[Queue] Exited serial worker loop");
             } finally {
                 // Return connection to pool when worker stops
                 $this->redis->close();
+                error_log("[Queue] Serial worker cleanup complete");
             }
         });
     }
@@ -144,6 +198,7 @@ class CoroutineRedisQueue extends CliQueue implements StatisticsProviderInterfac
             // Channels for communication between coroutines
             $jobChannel = new \Swoole\Coroutine\Channel($this->concurrency * 2);  // Job queue
             $resultChannel = new \Swoole\Coroutine\Channel($this->concurrency * 2);  // Completed job IDs
+            $channelsClosed = false;  // Track if channels have been closed
             
             $activeWorkers = 0;
             $shouldStop = false;
@@ -157,12 +212,19 @@ class CoroutineRedisQueue extends CliQueue implements StatisticsProviderInterfac
                 $this->redis->open();
                 
                 try {
-                    while ($canContinue() && !$shouldStop) {
+                    while ($canContinue() && !$shouldStop && !$this->isShutdownRequested()) {
                         try {
                             if (($payload = $this->reserve($timeout)) !== null) {
                                 // Send job to worker pool
                                 $jobChannel->push($payload);
                             } elseif (!$repeat) {
+                                $shouldStop = true;
+                                break;
+                            }
+                            
+                            // Check for shutdown signal
+                            if ($this->isShutdownRequested()) {
+                                \Yii::info('Shutdown requested, stopping producer', __METHOD__);
                                 $shouldStop = true;
                                 break;
                             }
@@ -189,15 +251,40 @@ class CoroutineRedisQueue extends CliQueue implements StatisticsProviderInterfac
             
             // Worker coroutines: process jobs concurrently
             for ($i = 0; $i < $this->concurrency; $i++) {
-                Coroutine::create(function () use ($jobChannel, $resultChannel, &$activeWorkers, &$processedCount) {
+                Coroutine::create(function () use ($jobChannel, $resultChannel, &$activeWorkers, &$processedCount, &$shouldStop, $i) {
                     $activeWorkers++;
+                    \Yii::info("Worker #{$i}: started", __METHOD__);
                     
                     try {
                         while (true) {
-                            $payload = $jobChannel->pop();
+                            // Check for shutdown before blocking on pop
+                            if ($this->isShutdownRequested() || $shouldStop) {
+                                \Yii::info("Worker #{$i}: shutdown requested, exiting", __METHOD__);
+                                break;
+                            }
+                            
+                            // Use timeout to allow checking shutdown periodically
+                            $payload = $jobChannel->pop(1.0);
+                            
+                            // false means timeout or channel closed
+                            if ($payload === false) {
+                                // Check if we should continue waiting
+                                if ($this->isShutdownRequested() || $shouldStop) {
+                                    \Yii::info("Worker #{$i}: shutdown detected, exiting", __METHOD__);
+                                    break;
+                                }
+                                // Also check if channel is closed by trying to get stats
+                                $stats = @$jobChannel->stats();
+                                if ($stats === false) {
+                                    \Yii::info("Worker #{$i}: channel closed, exiting", __METHOD__);
+                                    break;
+                                }
+                                continue; // Timeout, try again
+                            }
                             
                             // null means stop signal
                             if ($payload === null) {
+                                \Yii::info("Worker #{$i}: received stop signal", __METHOD__);
                                 break;
                             }
                             
@@ -214,17 +301,18 @@ class CoroutineRedisQueue extends CliQueue implements StatisticsProviderInterfac
                                 }
                             } catch (\Throwable $e) {
                                 // Log error but don't crash the worker
-                                \Yii::error("Job #{$id} failed: " . $e->getMessage(), __METHOD__);
+                                \Yii::error("Worker #{$i}: Job #{$id} failed: " . $e->getMessage(), __METHOD__);
                             }
                         }
                     } finally {
                         $activeWorkers--;
+                        \Yii::info("Worker #{$i}: exited, activeWorkers now: {$activeWorkers}", __METHOD__);
                     }
                 });
             }
             
             // Deleter coroutine: receives completed job IDs and deletes from Redis
-            Coroutine::create(function () use ($resultChannel, &$activeWorkers, &$producerDone, &$deleterDone) {
+            Coroutine::create(function () use ($resultChannel, &$activeWorkers, &$producerDone, &$deleterDone, &$shouldStop) {
                 // Create a separate Redis connection for deletion
                 // This avoids connection conflicts with the producer coroutine
                 $redis = $this->createRedisConnection();
@@ -233,6 +321,12 @@ class CoroutineRedisQueue extends CliQueue implements StatisticsProviderInterfac
                 try {
                     // Keep processing results until all workers are done
                     while (true) {
+                        // Check for shutdown first
+                        if ($this->isShutdownRequested() || $shouldStop) {
+                            \Yii::info("Deleter: shutdown requested, exiting", __METHOD__);
+                            break;
+                        }
+                        
                         // Use pop with timeout to avoid blocking forever
                         $id = $resultChannel->pop(0.1);
                         
@@ -247,32 +341,138 @@ class CoroutineRedisQueue extends CliQueue implements StatisticsProviderInterfac
                         
                         // Exit when producer is done and all workers finished
                         if ($producerDone && $activeWorkers === 0) {
-                            // Drain remaining results
-                            while (($id = $resultChannel->pop(0.01)) !== false) {
+                            \Yii::info("Deleter: producer done and no active workers, draining results", __METHOD__);
+                            // Drain remaining results quickly
+                            $drained = 0;
+                            while (($id = $resultChannel->pop(0.01)) !== false && $drained < 1000) {
                                 try {
                                     $this->deleteWithConnection($redis, $id);
+                                    $drained++;
                                 } catch (\Throwable $e) {
                                     \Yii::error("Failed to delete job #{$id}: " . $e->getMessage(), __METHOD__);
                                 }
                             }
+                            \Yii::info("Deleter: drained {$drained} results, exiting", __METHOD__);
                             break;
                         }
                     }
+                } catch (\Throwable $e) {
+                    \Yii::error("Deleter error: " . $e->getMessage(), __METHOD__);
                 } finally {
                     $redis->close();
                     $deleterDone = true;
+                    \Yii::info("Deleter: finally block, deleterDone set to true", __METHOD__);
                 }
             });
             
             // Wait for all coroutines to finish
+            $shutdownTimeout = 5.0; // Maximum time to wait for graceful shutdown (reduced from 10s)
+            $shutdownStartTime = microtime(true);
+            $forcedShutdown = false;
+            
             while (!$producerDone || $activeWorkers > 0 || !$deleterDone) {
                 Coroutine::sleep(0.1);
+                
+                // Debug: Log current state
+                if ($this->isShutdownRequested()) {
+                    $elapsed = microtime(true) - $shutdownStartTime;
+                    \Yii::info(sprintf(
+                        "[Wait Loop] Elapsed: %.1fs, Producer: %s, Workers: %d, Deleter: %s",
+                        $elapsed,
+                        $producerDone ? 'done' : 'running',
+                        $activeWorkers,
+                        $deleterDone ? 'done' : 'running'
+                    ), __METHOD__);
+                }
+                
+                // Force exit if shutdown requested and producer is done
+                if ($this->isShutdownRequested() && $producerDone) {
+                    // Give workers a bit more time to finish
+                    $maxWait = 2.0; // 2 seconds max (reduced from 5s)
+                    $waited = 0.0;
+                    while ($activeWorkers > 0 && $waited < $maxWait) {
+                        Coroutine::sleep(0.1);
+                        $waited += 0.1;
+                    }
+                    
+                    // Force break if workers still not done
+                    if ($activeWorkers > 0) {
+                        \Yii::warning("Forcing shutdown with {$activeWorkers} workers still active", __METHOD__);
+                    }
+                    
+                    // Close channels immediately to wake up deleter
+                    if (!$deleterDone && !$channelsClosed) {
+                        \Yii::warning("Forcing shutdown - closing channels to wake deleter", __METHOD__);
+                        try {
+                            $jobChannel->close();
+                            $resultChannel->close();
+                            $channelsClosed = true;
+                        } catch (\Throwable $e) {
+                            \Yii::error("Error closing channels: " . $e->getMessage(), __METHOD__);
+                        }
+                        
+                        // Give deleter a moment to exit
+                        Coroutine::sleep(0.2);
+                        
+                        if (!$deleterDone) {
+                            \Yii::warning("Deleter still not done after closing channels", __METHOD__);
+                        }
+                    }
+                    
+                    $forcedShutdown = true;
+                    break;
+                }
+                
+                // Safety timeout to prevent infinite waiting
+                $elapsed = microtime(true) - $shutdownStartTime;
+                if ($elapsed >= $shutdownTimeout) {
+                    \Yii::warning(sprintf(
+                        "Shutdown timeout reached after %.1fs, forcing exit (producer: %s, workers: %d, deleter: %s)",
+                        $elapsed,
+                        $producerDone ? 'done' : 'running',
+                        $activeWorkers,
+                        $deleterDone ? 'done' : 'running'
+                    ), __METHOD__);
+                    
+                    // Close channels to force coroutines to exit
+                    if (!$channelsClosed) {
+                        try {
+                            $jobChannel->close();
+                            $resultChannel->close();
+                            $channelsClosed = true;
+                        } catch (\Throwable $e) {
+                            \Yii::error("Error closing channels on timeout: " . $e->getMessage(), __METHOD__);
+                        }
+                    }
+                    $forcedShutdown = true;
+                    break;
+                }
+            }
+            
+            // Close channels if not already closed
+            if (!$channelsClosed) {
+                try {
+                    $jobChannel->close();
+                    $resultChannel->close();
+                    $channelsClosed = true;
+                } catch (\Throwable $e) {
+                    \Yii::error("Error closing channels at end: " . $e->getMessage(), __METHOD__);
+                }
             }
             
             // Output statistics
             $duration = round(microtime(true) - $startTime, 2);
             $rate = $duration > 0 ? round($processedCount / $duration, 2) : 0;
-            \Yii::info("Queue worker finished: {$processedCount} jobs processed in {$duration}s ({$rate} jobs/s)", __METHOD__);
+            
+            if ($this->isShutdownRequested()) {
+                \Yii::info("Queue worker shutdown: {$processedCount} jobs processed in {$duration}s ({$rate} jobs/s)", __METHOD__);
+            } else {
+                \Yii::info("Queue worker finished: {$processedCount} jobs processed in {$duration}s ({$rate} jobs/s)", __METHOD__);
+            }
+            
+            // Final coroutine check
+            $finalStats = Coroutine::stats();
+            \Yii::info("Coroutines at end of runConcurrent: {$finalStats['coroutine_num']}", __METHOD__);
         });
     }
 
@@ -381,8 +581,28 @@ class CoroutineRedisQueue extends CliQueue implements StatisticsProviderInterfac
         $id = null;
         if (!$timeout) {
             $id = $this->redis->rpop("$this->channel.waiting");
-        } elseif ($result = $this->redis->brpop("$this->channel.waiting", $timeout)) {
-            $id = $result[1];
+        } else {
+            // Use shorter timeout intervals to allow checking for shutdown
+            // Break long timeout into 1-second chunks
+            $maxTimeout = 1; // Check for shutdown every 1 second
+            $elapsed = 0;
+            
+            while ($elapsed < $timeout) {
+                // Check for shutdown before blocking
+                if ($this->isShutdownRequested()) {
+                    return null;
+                }
+                
+                $remainingTimeout = min($maxTimeout, $timeout - $elapsed);
+                $result = $this->redis->brpop("$this->channel.waiting", $remainingTimeout);
+                
+                if ($result) {
+                    $id = $result[1];
+                    break;
+                }
+                
+                $elapsed += $remainingTimeout;
+            }
         }
         
         if (!$id) {

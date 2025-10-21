@@ -102,6 +102,16 @@ class CoroutineFileTarget extends Target
     private bool $initialized = false;
 
     /**
+     * Get the LogWorker instance for graceful shutdown
+     * 
+     * @return LogWorker|null
+     */
+    public function getWorker(): ?LogWorker
+    {
+        return $this->worker;
+    }
+
+    /**
      * @inheritdoc
      */
     public function init()
@@ -163,11 +173,20 @@ class CoroutineFileTarget extends Target
             return;
         }
 
+        // Check if we're in a coroutine context first
+        $inCoroutine = extension_loaded('swoole') && \Swoole\Coroutine::getCid() > 0;
+        
+        if (!$inCoroutine) {
+            // Not in coroutine, use sync export
+            $this->exportSync();
+            return;
+        }
+
         // Ensure we're initialized before exporting
         $this->ensureInitialized();
 
         if (!$this->initialized || $this->channel === null) {
-            // Fallback to synchronous writing if not in coroutine context
+            // Fallback to synchronous writing if not initialized
             $this->exportSync();
             return;
         }

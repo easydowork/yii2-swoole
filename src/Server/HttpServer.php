@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Dacheng\Yii2\Swoole\Server;
 
+use Dacheng\Yii2\Swoole\Db\CoroutineDbConnection;
+use Dacheng\Yii2\Swoole\Log\LogWorker;
+use Dacheng\Yii2\Swoole\Redis\CoroutineRedisConnection;
 use Swoole\Coroutine;
 use Swoole\Coroutine\Http\Server as SwooleCoroutineHttpServer;
 use Swoole\Http\Request;
@@ -41,6 +44,10 @@ class HttpServer extends Component
     private ?SwooleCoroutineHttpServer $server = null;
 
     private bool $isRunning = false;
+
+    private ?SignalHandler $signalHandler = null;
+
+    private int $activeRequests = 0;
 
     public function init(): void
     {
@@ -102,6 +109,11 @@ class HttpServer extends Component
 
         $this->isRunning = true;
 
+        // Initialize signal handler
+        $this->signalHandler = new SignalHandler();
+        $this->setupShutdownCallbacks();
+        $this->signalHandler->register();
+
         Coroutine\run(function () use ($factory, $host, $port, $settings, $dispatcher, $afterStartEvent, $afterStopEvent): void {
             $this->server = $factory($host, $port);
 
@@ -122,6 +134,17 @@ class HttpServer extends Component
             $afterStartEvent();
 
             $this->server->handle('/', function (Request $request, Response $response) use ($dispatcher, $server): void {
+                // Check if shutdown is requested
+                if ($this->signalHandler && $this->signalHandler->isShutdownRequested()) {
+                    $response->status(503);
+                    $response->header('Content-Type', 'text/plain; charset=UTF-8');
+                    $response->end('Server is shutting down');
+                    return;
+                }
+
+                // Track active requests
+                $this->activeRequests++;
+                
                 try {
                     $dispatcher->dispatch($request, $response, $server);
                 } catch (\Throwable $e) {
@@ -133,15 +156,96 @@ class HttpServer extends Component
                     $response->header('Content-Type', 'text/plain; charset=UTF-8');
                     $body = defined('YII_DEBUG') && YII_DEBUG ? (string) $e : 'Internal Server Error';
                     $response->end($body);
+                } finally {
+                    $this->activeRequests--;
                 }
             });
 
             try {
                 $this->server->start();
             } finally {
+                // Cleanup signal handler
+                if ($this->signalHandler) {
+                    $this->signalHandler->unregister();
+                }
                 $afterStopEvent();
             }
         });
+    }
+
+    /**
+     * Sets up shutdown callbacks for graceful shutdown
+     */
+    private function setupShutdownCallbacks(): void
+    {
+        if (!$this->signalHandler) {
+            return;
+        }
+
+        // Priority 10: Wait for in-flight requests
+        $this->signalHandler->onShutdown('wait_requests', function () {
+            error_log('[HttpServer] Waiting for in-flight requests to complete...');
+            $this->signalHandler->waitForInflightRequests(
+                fn() => $this->activeRequests > 0,
+                5.0
+            );
+        }, 10);
+
+        // Priority 20: Stop accepting new requests (shutdown server)
+        $this->signalHandler->onShutdown('stop_server', function () {
+            error_log('[HttpServer] Stopping HTTP server...');
+            if ($this->server) {
+                $this->server->shutdown();
+            }
+        }, 20);
+
+        // Priority 30: Flush logs
+        $this->signalHandler->onShutdown('flush_logs', function () {
+            error_log('[HttpServer] Flushing logs...');
+            if (\Yii::$app->has('log')) {
+                try {
+                    // Stop log workers first
+                    foreach (\Yii::$app->log->targets as $target) {
+                        if (method_exists($target, 'getWorker')) {
+                            $worker = $target->getWorker();
+                            if ($worker instanceof LogWorker) {
+                                $worker->stop();
+                            }
+                        }
+                    }
+                    
+                    // Then export/flush remaining messages
+                    foreach (\Yii::$app->log->targets as $target) {
+                        if (method_exists($target, 'export')) {
+                            $messages = \Yii::$app->log->getLogger()->messages;
+                            if (!empty($messages)) {
+                                $target->collect($messages, true);
+                                $target->export();
+                            }
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    error_log('[HttpServer] Error flushing logs: ' . $e->getMessage());
+                }
+            }
+        }, 30);
+
+        // Priority 40: Close connection pools
+        $this->signalHandler->onShutdown('close_pools', function () {
+            error_log('[HttpServer] Closing connection pools...');
+            
+            try {
+                CoroutineDbConnection::shutdownAllPools();
+            } catch (\Throwable $e) {
+                error_log('[HttpServer] Error closing DB pools: ' . $e->getMessage());
+            }
+            
+            try {
+                CoroutineRedisConnection::shutdownAllPools();
+            } catch (\Throwable $e) {
+                error_log('[HttpServer] Error closing Redis pools: ' . $e->getMessage());
+            }
+        }, 40);
     }
 
     /**
