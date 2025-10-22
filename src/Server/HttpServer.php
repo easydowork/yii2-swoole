@@ -41,6 +41,31 @@ class HttpServer extends Component
      */
     public $serverFactory;
 
+    /**
+     * @var string|null Document root for static files (default: @webroot)
+     */
+    public ?string $documentRoot = null;
+
+    /**
+     * @var array Static file extensions and their MIME types
+     */
+    public array $staticFileExtensions = [
+        'css' => 'text/css',
+        'js' => 'application/javascript',
+        'json' => 'application/json',
+        'xml' => 'application/xml',
+        'jpg' => 'image/jpeg',
+        'jpeg' => 'image/jpeg',
+        'png' => 'image/png',
+        'gif' => 'image/gif',
+        'svg' => 'image/svg+xml',
+        'ico' => 'image/x-icon',
+        'woff' => 'font/woff',
+        'woff2' => 'font/woff2',
+        'ttf' => 'font/ttf',
+        'eot' => 'application/vnd.ms-fontobject',
+    ];
+
     private ?SwooleCoroutineHttpServer $server = null;
 
     private bool $isRunning = false;
@@ -146,6 +171,11 @@ class HttpServer extends Component
                 $this->activeRequests++;
                 
                 try {
+                    // Try to serve static files first
+                    if ($this->tryServeStaticFile($request, $response)) {
+                        return;
+                    }
+                    
                     $dispatcher->dispatch($request, $response, $server);
                 } catch (\Throwable $e) {
                     if (method_exists($response, 'isWritable') && !$response->isWritable()) {
@@ -262,6 +292,79 @@ class HttpServer extends Component
         $this->trigger(self::EVENT_BEFORE_STOP);
 
         $this->server->shutdown();
+    }
+
+    /**
+     * Try to serve static file if the request matches a static file extension
+     *
+     * @param Request $request
+     * @param Response $response
+     * @return bool True if static file was served, false otherwise
+     */
+    private function tryServeStaticFile(Request $request, Response $response): bool
+    {
+        $uri = $request->server['request_uri'] ?? '/';
+        
+        // Remove query string
+        if (($pos = strpos($uri, '?')) !== false) {
+            $uri = substr($uri, 0, $pos);
+        }
+        
+        // Get file extension
+        $extension = pathinfo($uri, PATHINFO_EXTENSION);
+        
+        // Check if it's a static file extension we handle
+        if (empty($extension) || !isset($this->staticFileExtensions[$extension])) {
+            return false;
+        }
+        
+        // Get document root
+        $documentRoot = $this->documentRoot;
+        if ($documentRoot === null) {
+            $documentRoot = \Yii::getAlias('@webroot');
+        }
+        
+        // Construct file path
+        $filePath = rtrim($documentRoot, '/') . '/' . ltrim($uri, '/');
+        
+        // Security check: ensure the file path is within document root
+        $realPath = realpath($filePath);
+        $realDocRoot = realpath($documentRoot);
+        if ($realPath === false || $realDocRoot === false || strpos($realPath, $realDocRoot) !== 0) {
+            return false;
+        }
+        
+        // Check if file exists and is readable
+        if (!is_file($realPath) || !is_readable($realPath)) {
+            return false;
+        }
+        
+        // Read file content
+        $content = file_get_contents($realPath);
+        if ($content === false) {
+            return false;
+        }
+        
+        // Set response headers
+        $response->status(200);
+        $response->header('Content-Type', $this->staticFileExtensions[$extension]);
+        $response->header('Content-Length', (string) strlen($content));
+        
+        // Add cache headers for static files
+        $lastModified = filemtime($realPath);
+        $response->header('Last-Modified', gmdate('D, d M Y H:i:s', $lastModified) . ' GMT');
+        $response->header('Cache-Control', 'public, max-age=86400'); // 1 day
+        
+        // Check if client has cached version
+        $ifModifiedSince = $request->header['if-modified-since'] ?? null;
+        if ($ifModifiedSince !== null && strtotime($ifModifiedSince) >= $lastModified) {
+            $response->status(304);
+            $response->end();
+            return true;
+        }
+        
+        $response->end($content);
+        return true;
     }
 
 }
