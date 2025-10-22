@@ -1,6 +1,6 @@
 <?php
 
-namespace dacheng\app\controllers;
+namespace app\controllers;
 
 use Yii;
 use yii\web\Controller;

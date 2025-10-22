@@ -1,6 +1,6 @@
 <?php
 
-namespace dacheng\app\controllers;
+namespace app\controllers;
 
 use Throwable;
 use Yii;

@@ -19,7 +19,7 @@ $config = [
         ],
         'user' => [
             'class' => \Dacheng\Yii2\Swoole\User\CoroutineUser::class,
-            'identityClass' => \dacheng\app\models\UserIdentity::class,
+            'identityClass' => \app\models\UserIdentity::class,
             'enableAutoLogin' => false,
         ],
         'errorHandler' => [

@@ -1,6 +1,6 @@
 <?php
 
-namespace dacheng\app\jobs;
+namespace app\jobs;
 
 use Swoole\Coroutine;
 use yii\base\BaseObject;
