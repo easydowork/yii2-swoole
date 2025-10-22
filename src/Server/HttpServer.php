@@ -54,6 +54,7 @@ class HttpServer extends Component
         'js' => 'application/javascript',
         'json' => 'application/json',
         'xml' => 'application/xml',
+        'map' => 'application/json',
         'jpg' => 'image/jpeg',
         'jpeg' => 'image/jpeg',
         'png' => 'image/png',
@@ -303,6 +304,11 @@ class HttpServer extends Component
      */
     private function tryServeStaticFile(Request $request, Response $response): bool
     {
+        // Skip static file serving if documentRoot is not configured
+        if ($this->documentRoot === null) {
+            return false;
+        }
+        
         $uri = $request->server['request_uri'] ?? '/';
         
         // Remove query string
@@ -318,19 +324,21 @@ class HttpServer extends Component
             return false;
         }
         
-        // Get document root
-        $documentRoot = $this->documentRoot;
-        if ($documentRoot === null) {
-            $documentRoot = \Yii::getAlias('@webroot');
-        }
-        
         // Construct file path
-        $filePath = rtrim($documentRoot, '/') . '/' . ltrim($uri, '/');
+        $filePath = rtrim($this->documentRoot, '/') . '/' . ltrim($uri, '/');
         
         // Security check: ensure the file path is within document root
+        // Use cached realpath for document root to avoid repeated filesystem calls
+        static $realDocRoot = null;
+        if ($realDocRoot === null) {
+            $realDocRoot = realpath($this->documentRoot);
+            if ($realDocRoot === false) {
+                return false;
+            }
+        }
+        
         $realPath = realpath($filePath);
-        $realDocRoot = realpath($documentRoot);
-        if ($realPath === false || $realDocRoot === false || strpos($realPath, $realDocRoot) !== 0) {
+        if ($realPath === false || strpos($realPath, $realDocRoot) !== 0) {
             return false;
         }
         

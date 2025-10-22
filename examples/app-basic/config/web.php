@@ -10,12 +10,13 @@ $config = [
         '@bower' => '@vendor/bower-asset',
         '@npm'   => '@vendor/npm-asset',
         '@webroot' => dirname(__DIR__) . '/web',
-        '@web' => '',
     ],
     'components' => [
         'request' => [
             'cookieValidationKey' => 'test-secret-key',
             'enableCsrfValidation' => false, // Disable CSRF for API testing
+            'baseUrl' => '',
+            'scriptUrl' => '/index.php',
         ],
         'assetManager' => [
             'basePath' => dirname(__DIR__) . '/web/assets',
@@ -26,6 +27,7 @@ $config = [
             'redis' => 'redis',
             'keyPrefix' => 'phpsession:',
             'timeout' => (int)(getenv('YII_SESSION_TIMEOUT') ?: 1440),
+            'autoCloseOnCoroutineEnd' => false, // Disable auto-close to prevent conflicts
         ],
         'user' => [
             'class' => \Dacheng\Yii2\Swoole\User\CoroutineUser::class,

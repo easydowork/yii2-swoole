@@ -198,6 +198,12 @@ class RequestDispatcher extends BaseObject implements RequestDispatcherInterface
 
         /** @var class-string<Application> $class */
         $this->application = new $class($config);
+        
+        // Set @web alias for Swoole environment if not already set
+        // This ensures asset URLs are generated correctly
+        if (!Yii::getAlias('@web', false)) {
+            Yii::setAlias('@web', '');
+        }
 
         return $this->application;
     }
@@ -269,6 +275,11 @@ class RequestDispatcher extends BaseObject implements RequestDispatcherInterface
         $yiiRequest->setScriptUrl($scriptUrl);
         $yiiRequest->setBaseUrl($baseUrl);
         $yiiRequest->setPathInfo($pathInfo);
+        
+        // Set @web alias if not already set, to ensure correct URL generation in Swoole environment
+        if (!Yii::getAlias('@web', false)) {
+            Yii::setAlias('@web', $baseUrl ?: '');
+        }
 
         $headerCollection = $yiiRequest->getHeaders();
         if ($headerCollection instanceof HeaderCollection) {

@@ -9,7 +9,10 @@ $config = [
     'components' => [
         'request' => [
             'cookieValidationKey' => 'test-secret-key',
-            'enableCsrfValidation' => false, // Disable CSRF for API testing
+            'enableCsrfValidation' => false, // Disable CSRF for API
+            'parsers' => [
+                'application/json' => 'yii\web\JsonParser',
+            ],
         ],
         'session' => [
             'class' => \Dacheng\Yii2\Swoole\Session\CoroutineSession::class,

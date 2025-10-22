@@ -59,6 +59,7 @@ return [
             'class' => \Dacheng\Yii2\Swoole\Server\HttpServer::class,
             'host' => '127.0.0.1',
             'port' => 9501,
+            'documentRoot' => dirname(__DIR__) . '/web',
             'settings' => [
                 'open_tcp_nodelay' => true,
                 'tcp_fastopen' => true,
