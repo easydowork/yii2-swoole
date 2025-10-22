@@ -65,11 +65,7 @@ class CoroutineDbConnection extends Connection
 
         parent::close();
 
-        try {
-            $this->ensurePool()->release($pdo);
-        } catch (\Throwable $exception) {
-            throw $exception;
-        }
+        $this->ensurePool()->release($pdo);
     }
 
     public function reset(): void

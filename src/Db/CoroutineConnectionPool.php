@@ -56,6 +56,7 @@ final class CoroutineConnectionPool
         }
 
         if ($connection === false) {
+            // Timeout or channel closed - pool exhausted
             $stats = $this->channel->stats();
 
             throw new RuntimeException(
@@ -68,10 +69,7 @@ final class CoroutineConnectionPool
             );
         }
 
-        if ($connection !== null) {
-            $this->closeConnection($connection);
-        }
-
+        // Connection is null or invalid - create a new one
         return $this->createConnection();
     }
 
@@ -82,7 +80,9 @@ final class CoroutineConnectionPool
 
     private function closeConnection(PDO $connection): void
     {
-        $connection = null;
+        // PDO connections close automatically when all references are destroyed
+        // This method exists for consistency with the connection pool interface
+        unset($connection);
     }
 
     /**

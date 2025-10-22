@@ -75,6 +75,8 @@ class HttpServer extends Component
 
     private int $activeRequests = 0;
 
+    private ?string $realDocRoot = null;
+
     public function init(): void
     {
         parent::init();
@@ -95,6 +97,10 @@ class HttpServer extends Component
             throw new InvalidConfigException('Property "serverFactory" must be a valid callable.');
         }
 
+        // Pre-compute real document root path if static file serving is enabled
+        if ($this->documentRoot !== null) {
+            $this->realDocRoot = realpath($this->documentRoot);
+        }
     }
 
     /**
@@ -331,17 +337,12 @@ class HttpServer extends Component
         $filePath = rtrim($this->documentRoot, '/') . '/' . ltrim($uri, '/');
         
         // Security check: ensure the file path is within document root
-        // Use cached realpath for document root to avoid repeated filesystem calls
-        static $realDocRoot = null;
-        if ($realDocRoot === null) {
-            $realDocRoot = realpath($this->documentRoot);
-            if ($realDocRoot === false) {
-                return false;
-            }
+        if ($this->realDocRoot === false || $this->realDocRoot === null) {
+            return false;
         }
         
         $realPath = realpath($filePath);
-        if ($realPath === false || strpos($realPath, $realDocRoot) !== 0) {
+        if ($realPath === false || strpos($realPath, $this->realDocRoot) !== 0) {
             return false;
         }
         

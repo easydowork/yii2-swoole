@@ -35,6 +35,10 @@ class RequestDispatcher extends BaseObject implements RequestDispatcherInterface
 
     private ?string $entryScript = null;
 
+    private static ?\ReflectionMethod $renderExceptionMethod = null;
+
+    private static ?\ReflectionMethod $sendContentMethod = null;
+
     public function __construct(?string $appConfig = null, array $config = [])
     {
         if ($appConfig !== null) {
@@ -168,9 +172,11 @@ class RequestDispatcher extends BaseObject implements RequestDispatcherInterface
 
     private function invokeErrorHandlerRenderException(ErrorHandler $errorHandler, Throwable $exception): void
     {
-        $method = (new \ReflectionObject($errorHandler))->getMethod('renderException');
-        $method->setAccessible(true);
-        $method->invoke($errorHandler, $exception);
+        if (self::$renderExceptionMethod === null) {
+            self::$renderExceptionMethod = (new \ReflectionClass(ErrorHandler::class))->getMethod('renderException');
+            self::$renderExceptionMethod->setAccessible(true);
+        }
+        self::$renderExceptionMethod->invoke($errorHandler, $exception);
     }
 
     private function prepareLogger(Application $app): void
@@ -510,9 +516,11 @@ class RequestDispatcher extends BaseObject implements RequestDispatcherInterface
 
     private function invokeResponseSendContent(YiiResponse $response): void
     {
-        $method = (new \ReflectionObject($response))->getMethod('sendContent');
-        $method->setAccessible(true);
-        $method->invoke($response);
+        if (self::$sendContentMethod === null) {
+            self::$sendContentMethod = (new \ReflectionClass(YiiResponse::class))->getMethod('sendContent');
+            self::$sendContentMethod->setAccessible(true);
+        }
+        self::$sendContentMethod->invoke($response);
     }
 
     private function restorePreviousApplication(?Application $previousApp): void

@@ -20,8 +20,7 @@ class Bootstrap implements BootstrapInterface
 
     public function bootstrap($app): void
     {
-        $memoryLimit = getenv('SWOOLE_MEMORY_LIMIT') ?: $this->memoryLimit;
-        if ($memoryLimit !== '' && function_exists('ini_set')) {
+        if ($memoryLimit = getenv('SWOOLE_MEMORY_LIMIT') ?: $this->memoryLimit) {
             ini_set('memory_limit', $memoryLimit);
         }
 

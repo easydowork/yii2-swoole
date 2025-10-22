@@ -70,6 +70,11 @@ class CoroutineRedisConnection extends BaseRedisConnection
     private bool $released = false;
 
     /**
+     * @var \ReflectionProperty|null Cached reflection property for accessing parent's _pool
+     */
+    private static ?\ReflectionProperty $poolProperty = null;
+
+    /**
      * Opens the Redis connection.
      * 
      * If pooling is enabled and we're in a coroutine context, acquires a socket from the pool.
@@ -304,9 +309,7 @@ class CoroutineRedisConnection extends BaseRedisConnection
     private function authenticateSocket($socket): void
     {
         // Temporarily inject socket into _pool for executeCommand to work
-        $reflection = new \ReflectionClass(BaseRedisConnection::class);
-        $property = $reflection->getProperty('_pool');
-        $property->setAccessible(true);
+        $property = self::getPoolProperty();
         $pool = $property->getValue($this);
         $oldSocket = $pool[$this->connectionString] ?? null;
         $pool[$this->connectionString] = $socket;
@@ -414,6 +417,20 @@ class CoroutineRedisConnection extends BaseRedisConnection
     }
 
     /**
+     * Gets the cached reflection property for the parent's _pool array.
+     * 
+     * @return \ReflectionProperty
+     */
+    private static function getPoolProperty(): \ReflectionProperty
+    {
+        if (self::$poolProperty === null) {
+            self::$poolProperty = (new \ReflectionClass(BaseRedisConnection::class))->getProperty('_pool');
+            self::$poolProperty->setAccessible(true);
+        }
+        return self::$poolProperty;
+    }
+
+    /**
      * Injects a socket into the base class's internal _pool array.
      * This makes all base class methods work with our pooled socket.
      * 
@@ -421,10 +438,7 @@ class CoroutineRedisConnection extends BaseRedisConnection
      */
     private function setPoolSocket($socket): void
     {
-        $reflection = new \ReflectionClass(BaseRedisConnection::class);
-        $property = $reflection->getProperty('_pool');
-        $property->setAccessible(true);
-        
+        $property = self::getPoolProperty();
         $pool = $property->getValue($this);
         $pool[$this->connectionString] = $socket;
         $property->setValue($this, $pool);
@@ -435,10 +449,7 @@ class CoroutineRedisConnection extends BaseRedisConnection
      */
     private function clearPoolSocket(): void
     {
-        $reflection = new \ReflectionClass(BaseRedisConnection::class);
-        $property = $reflection->getProperty('_pool');
-        $property->setAccessible(true);
-        
+        $property = self::getPoolProperty();
         $pool = $property->getValue($this);
         unset($pool[$this->connectionString]);
         $property->setValue($this, $pool);

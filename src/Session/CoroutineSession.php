@@ -47,6 +47,8 @@ class CoroutineSession extends YiiRedisSession
 
     public function open()
     {
+        $this->isClosed = false;
+        
         if ($this->autoCloseOnCoroutineEnd) {
             $this->registerCoroutineCloseHandler();
         }
@@ -59,48 +61,45 @@ class CoroutineSession extends YiiRedisSession
     }
 
     /**
-     * @var bool Prevent recursive close() calls
+     * @var bool Track whether session has been closed
      */
-    private bool $isClosing = false;
+    private bool $isClosed = false;
 
     public function close()
     {
-        // Prevent recursive close() calls
-        if ($this->isClosing) {
+        // Prevent duplicate close() calls
+        if ($this->isClosed) {
             return;
         }
         
         // Check if session is actually active before attempting to close
         if (session_status() !== PHP_SESSION_ACTIVE) {
-            // Session already closed, just clean up
+            // Session already closed at PHP level, just clean up resources
             if ($this->redis instanceof CoroutineRedisConnection) {
                 $this->redis->close();
             }
             $this->deferRegistered = false;
             $this->deferCoroutineId = -1;
+            $this->isClosed = true;
             return;
         }
         
-        $this->isClosing = true;
+        $this->isClosed = true;
         
-        try {
-            if ($this->getIsActive()) {
-                parent::close();
-            }
-
-            if ($this->redis instanceof CoroutineRedisConnection) {
-                $this->redis->close();
-            }
-
-            if (isset($_SESSION) && is_array($_SESSION)) {
-                $_SESSION = [];
-            }
-
-            $this->deferRegistered = false;
-            $this->deferCoroutineId = -1;
-        } finally {
-            $this->isClosing = false;
+        if ($this->getIsActive()) {
+            parent::close();
         }
+
+        if ($this->redis instanceof CoroutineRedisConnection) {
+            $this->redis->close();
+        }
+
+        if (isset($_SESSION) && is_array($_SESSION)) {
+            $_SESSION = [];
+        }
+
+        $this->deferRegistered = false;
+        $this->deferCoroutineId = -1;
     }
 
     public function reset(): void
