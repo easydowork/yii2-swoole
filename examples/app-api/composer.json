@@ -11,8 +11,7 @@
         "ext-swoole": "^6.0",
         "yiisoft/yii2": "~2.0.45",
         "yiisoft/yii2-redis": "^2.0",
-        "yiisoft/yii2-queue": "^2.0",
-        "dacheng-php/yii2-swoole": "*"
+        "yiisoft/yii2-queue": "^2.0"
     },
     "require-dev": {
         "yiisoft/yii2-debug": "~2.1.0",
@@ -20,7 +19,8 @@
     },
     "autoload": {
         "psr-4": {
-            "app\\": "./"
+            "app\\": "./",
+            "Dacheng\\Yii2\\Swoole\\": "../../src/"
         }
     },
     "config": {
@@ -47,13 +47,6 @@
         }
     },
     "repositories": [
-        {
-            "type": "path",
-            "url": "../../",
-            "options": {
-                "symlink": false
-            }
-        },
         {
             "type": "composer",
             "url": "https://asset-packagist.org"

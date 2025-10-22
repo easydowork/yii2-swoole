@@ -21,13 +21,18 @@
         "yiisoft/yii2-bootstrap5": "^2.0",
         "yiisoft/yii2-symfonymailer": "~2.0.3",
         "yiisoft/yii2-redis": "^2.0",
-        "yiisoft/yii2-queue": "^2.0",
-        "dacheng-php/yii2-swoole": "*"
+        "yiisoft/yii2-queue": "^2.0"
     },
     "require-dev": {
         "yiisoft/yii2-debug": "~2.1.0",
         "yiisoft/yii2-gii": "~2.2.0",
         "yiisoft/yii2-faker": "~2.0.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "app\\": "./",
+            "Dacheng\\Yii2\\Swoole\\": "../../src/"
+        }
     },
     "config": {
         "allow-plugins": {
@@ -64,13 +69,6 @@
         }
     },
     "repositories": [
-        {
-            "type": "path",
-            "url": "../../",
-            "options": {
-                "symlink": true
-            }
-        },
         {
             "type": "composer",
             "url": "https://asset-packagist.org"
