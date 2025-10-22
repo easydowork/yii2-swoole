@@ -1,7 +1,7 @@
 {
   "name": "dacheng-php/yii2-swoole",
   "version": "1.0.0-dev",
-  "description": "Swoole coroutine integration for Yii2: single-process HTTP server with connection pools, async queue workers, and coroutine-safe component wrappers",
+  "description": "Yii2 Swoole extension, provides coroutine http server and more coroutine features.",
   "keywords": [
     "Yii2",
     "Swoole",
@@ -40,11 +40,5 @@
     "allow-plugins": {
       "yiisoft/yii2-composer": true
     }
-  },
-  "repositories": [
-    {
-      "type": "composer",
-      "url": "https://asset-packagist.org"
-    }
-  ]
+  }
 }

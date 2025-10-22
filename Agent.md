@@ -2,7 +2,7 @@
 
 ## Project Objective
 
-This is an yii2 extension, provides coroutine http server powered by swoole 6+.
+Yii2 Swoole extension, provides coroutine http server and more coroutine features.
 
 ## Documents
 
@@ -14,6 +14,5 @@ This is an yii2 extension, provides coroutine http server powered by swoole 6+.
 
 ## Directory Structure
 
-- http.php: swoole coroutine http server example
+- examples/: yii2 applications for demonstrating how to use yii2-swoole
 - src/: yii2-swoole extension for integrating swoole coroutine into yii2
-- app/: yii2 application for demonstrating how to use yii2-swoole
