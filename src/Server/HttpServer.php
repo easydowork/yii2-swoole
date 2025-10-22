@@ -145,6 +145,9 @@ class HttpServer extends Component
 
             // Apply relevant settings for coroutine server
             $coroutineSettings = [];
+            if (isset($settings['backlog'])) {
+                $coroutineSettings['backlog'] = $settings['backlog'];
+            }
             if (isset($settings['open_tcp_nodelay'])) {
                 $coroutineSettings['open_tcp_nodelay'] = $settings['open_tcp_nodelay'];
             }

@@ -91,6 +91,19 @@ class RequestDispatcher extends BaseObject implements RequestDispatcherInterface
             $app->params['__swooleRequest'] = null;
             $yiiResponse->clear();
             $yiiResponse->format = YiiResponse::FORMAT_HTML;
+            
+            // Close session explicitly to ensure proper cleanup
+            if ($app->has('session')) {
+                try {
+                    $session = $app->get('session', false);
+                    if ($session && method_exists($session, 'close')) {
+                        $session->close();
+                    }
+                } catch (\Throwable $e) {
+                    // Silently handle session close errors to prevent breaking the response
+                }
+            }
+            
             $this->flushLogger($app);
 
             $restoreGlobals();

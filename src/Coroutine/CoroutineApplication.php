@@ -29,7 +29,7 @@ class CoroutineApplication extends Application
      * These components may have state that should persist across requests.
      */
     protected array $persistentComponentIds = [
-        'queue', // Queue jobs should persist across HTTP requests
+        'queue',
     ];
 
     public function __get($name)

@@ -58,22 +58,49 @@ class CoroutineSession extends YiiRedisSession
         $this->ensureResponseCarriesSessionCookie();
     }
 
+    /**
+     * @var bool Prevent recursive close() calls
+     */
+    private bool $isClosing = false;
+
     public function close()
     {
-        if ($this->getIsActive()) {
-            parent::close();
+        // Prevent recursive close() calls
+        if ($this->isClosing) {
+            return;
         }
-
-        if ($this->redis instanceof CoroutineRedisConnection) {
-            $this->redis->close();
+        
+        // Check if session is actually active before attempting to close
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            // Session already closed, just clean up
+            if ($this->redis instanceof CoroutineRedisConnection) {
+                $this->redis->close();
+            }
+            $this->deferRegistered = false;
+            $this->deferCoroutineId = -1;
+            return;
         }
+        
+        $this->isClosing = true;
+        
+        try {
+            if ($this->getIsActive()) {
+                parent::close();
+            }
 
-        if (isset($_SESSION) && is_array($_SESSION)) {
-            $_SESSION = [];
+            if ($this->redis instanceof CoroutineRedisConnection) {
+                $this->redis->close();
+            }
+
+            if (isset($_SESSION) && is_array($_SESSION)) {
+                $_SESSION = [];
+            }
+
+            $this->deferRegistered = false;
+            $this->deferCoroutineId = -1;
+        } finally {
+            $this->isClosing = false;
         }
-
-        $this->deferRegistered = false;
-        $this->deferCoroutineId = -1;
     }
 
     public function reset(): void
