@@ -1,101 +1,195 @@
-# Yii2 Swoole Example Application
+# app-api Example
 
-This is a minimal example application demonstrating the yii2-swoole extension.
+API example application demonstrating **yii2-swoole** extension features.
 
-## Setup
+## What is yii2-swoole?
 
-1. Make sure you have Swoole 6+ installed:
+A Yii2 extension that provides:
+- **Single-process Coroutine HTTP Server** - High-concurrency request handling without worker processes
+- **Connection Pools** - Efficient database and Redis connection management
+- **Coroutine-safe Components** - Session, User, Queue, and Log components for concurrent execution
+- **Non-blocking I/O** - All I/O operations run in coroutines without blocking
+
+## Quick Start
+
+### Installation
+
 ```bash
-pecl install swoole
-```
+# Install dependencies
+composer install
 
-2. Make the console script executable:
-```bash
+# Make console executable
 chmod +x yii
 ```
 
-## Running the Server
+### Start Server
 
-Start the Swoole HTTP server:
 ```bash
 ./yii swoole/start
 ```
 
-The server will start on `http://0.0.0.0:9501`
+Server runs on `http://127.0.0.1:9501`
 
-## Testing Endpoints
+### Stop Server
 
-### Basic Test
-```bash
-curl http://localhost:9501/
-```
-
-### Request Information
-```bash
-curl http://localhost:9501/site/test
-```
-
-### Query Parameters
-```bash
-curl "http://localhost:9501/site/test?foo=bar&baz=qux"
-```
-
-### POST Request
-```bash
-curl -X POST http://localhost:9501/site/test -d "key=value"
-```
-
-### Set Cookie
-```bash
-curl -c cookies.txt http://localhost:9501/site/set-cookie
-```
-
-### Get Cookie
-```bash
-curl -b cookies.txt http://localhost:9501/site/get-cookie
-```
-
-### Coroutine Sleep Test
-```bash
-# This will sleep for 2 seconds using Swoole coroutine (non-blocking)
-curl "http://localhost:9501/site/sleep?seconds=2"
-```
-
-### Test Multiple Concurrent Requests
-```bash
-# Run multiple requests simultaneously to test coroutine performance
-for i in {1..5}; do
-  curl "http://localhost:9501/site/sleep?seconds=2" &
-done
-wait
-```
-
-## Stopping the Server
-
-From another terminal:
 ```bash
 ./yii swoole/stop
+# or press Ctrl+C
 ```
 
-Or press `Ctrl+C` in the terminal where the server is running.
+## Demo Endpoints
+
+### Basic Features
+```bash
+# Homepage
+curl http://localhost:9501/
+
+# Request info
+curl http://localhost:9501/site/test
+
+# Cookie management
+curl -c cookies.txt http://localhost:9501/site/set-cookie
+curl -b cookies.txt http://localhost:9501/site/get-cookie
+
+# Non-blocking coroutine sleep
+curl http://localhost:9501/site/sleep?seconds=2
+```
+
+### Connection Pools
+
+**Redis Pool:**
+```bash
+# Set/Get with connection pooling
+curl http://localhost:9501/redis/set?key=test&value=hello
+curl http://localhost:9501/redis/get?key=test
+
+# Pool statistics
+curl http://localhost:9501/redis/stats
+
+# Concurrent connections test
+curl http://localhost:9501/redis/concurrent?count=100
+```
+
+**Database Pool:**
+```bash
+# User query (uses DB pool)
+curl http://localhost:9501/user/view?id=1
+
+# Session management (uses Redis pool)
+curl http://localhost:9501/session/counter
+```
+
+### Queue System
+```bash
+# Push job to queue
+curl http://localhost:9501/queue/push?message=test
+
+# Queue statistics
+curl http://localhost:9501/queue/stats
+
+# Batch push
+curl http://localhost:9501/queue/push-batch?count=10
+```
+
+### Log Worker
+```bash
+# Generate test logs
+curl http://localhost:9501/log/test
+
+# Log worker statistics
+curl http://localhost:9501/log/stats
+
+# Stress test (1000 log entries)
+curl http://localhost:9501/log/stress?count=1000
+```
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────┐
+│  Swoole Coroutine HTTP Server (Single Process)  │
+├─────────────────────────────────────────────────┤
+│  Request → Coroutine → Application → Response   │
+├─────────────────────────────────────────────────┤
+│  Connection Pools:                              │
+│  ├─ Database Pool (max: 10 connections)        │
+│  └─ Redis Pool (max: 20 connections)           │
+├─────────────────────────────────────────────────┤
+│  Background Workers:                            │
+│  ├─ Queue Worker (coroutine-based)             │
+│  └─ Log Worker (coroutine channel)             │
+└─────────────────────────────────────────────────┘
+```
 
 ## Configuration
 
-- **Web config**: `config/web.php`
-- **Console config**: `config/console.php`
-- **Parameters**: `config/params.php`
+Key configuration files:
+- `config/common.php` - Shared configuration (pools, queue, Swoole server)
+- `config/web.php` - Web application (session, user, routes)
+- `config/console.php` - Console commands
+
+### Environment Variables
+
+```bash
+# Redis
+YII_REDIS_HOST=127.0.0.1
+YII_REDIS_PORT=6379
+YII_REDIS_DATABASE=0
+YII_REDIS_POOL_MAX_ACTIVE=20
+
+# Database
+YII_DB_DSN="mysql:host=127.0.0.1;dbname=yii2swoole"
+YII_DB_USERNAME=root
+YII_DB_PASSWORD=
+YII_DB_POOL_MAX_ACTIVE=10
+
+# Queue
+YII_QUEUE_CONCURRENCY=10
+
+# Log
+YII_LOG_CHANNEL_SIZE=10000
+
+# Session
+YII_SESSION_TIMEOUT=1440
+```
 
 ## Features Demonstrated
 
-1. **Basic routing** - URL routing with Yii2's URL manager
-2. **Request handling** - GET, POST, headers, query parameters
-3. **Cookie management** - Setting and reading cookies
-4. **Coroutine support** - Non-blocking sleep operations
-5. **JSON responses** - API-style responses
-6. **Error handling** - Proper error responses
+| Feature | Controller | Description |
+|---------|------------|-------------|
+| HTTP Server | `SiteController` | Request handling, cookies, coroutine sleep |
+| Redis Pool | `RedisController` | Connection pooling, concurrent access, benchmarks |
+| DB Pool | `UserController` | Database connection pooling, user queries |
+| Session | `SessionController` | Coroutine-safe session storage via Redis |
+| Queue | `QueueController` | Background job processing with coroutines |
+| Logging | `LogController` | Async logging with coroutine channels |
 
-## Notes
+## Performance Testing
 
-- The server runs in coroutine mode, allowing concurrent request handling
-- Each request is isolated with proper state management
-- The Swoole request object is available via `Yii::$app->params['__swooleRequest']`
+Test concurrent request handling:
+```bash
+# 100 concurrent sleep requests (all complete in ~2s, not 200s)
+for i in {1..100}; do
+  curl -s "http://localhost:9501/site/sleep?seconds=2" &
+done
+wait
+
+# Redis concurrent connections
+curl "http://localhost:9501/redis/concurrent?count=1000"
+
+# Queue batch processing
+curl "http://localhost:9501/queue/push-batch?count=100"
+```
+
+## Requirements
+
+- PHP 8.1+
+- Swoole 6.0+
+- Redis (for session, queue, cache)
+- MySQL (optional, for database examples)
+
+## Learn More
+
+- Main project: [../../README.md](../../README.md)
+- Swoole docs: https://wiki.swoole.com/zh-cn/
+- Yii2 docs: https://www.yiiframework.com/doc/guide/2.0/
