@@ -79,6 +79,28 @@ class RequestDispatcher extends BaseObject implements RequestDispatcherInterface
 
         try {
             $handledResponse = $app->handleRequest($yiiRequest);
+            
+            // Close DB/Redis immediately to return connections to pool
+            if ($app instanceof CoroutineApplication) {
+                $store = method_exists($app, 'getCoroutineComponentStore') ? $app->getCoroutineComponentStore() : [];
+                
+                if (isset($store['db']) && is_object($store['db']) && method_exists($store['db'], 'close')) {
+                    try {
+                        $store['db']->close();
+                    } catch (\Throwable $e) {
+                        error_log('[RequestDispatcher] Error closing DB: ' . $e->getMessage());
+                    }
+                }
+                
+                if (isset($store['redis']) && is_object($store['redis']) && method_exists($store['redis'], 'close')) {
+                    try {
+                        $store['redis']->close();
+                    } catch (\Throwable $e) {
+                        error_log('[RequestDispatcher] Error closing Redis: ' . $e->getMessage());
+                    }
+                }
+            }
+            
             $this->finalizeResponse($response, $handledResponse);
         } catch (Throwable $exception) {
             if (!$this->handleExceptionWithYii($exception, $app, $response)) {
@@ -93,10 +115,8 @@ class RequestDispatcher extends BaseObject implements RequestDispatcherInterface
             }
         } finally {
             $app->params['__swooleRequest'] = null;
-            $yiiResponse->clear();
-            $yiiResponse->format = YiiResponse::FORMAT_HTML;
             
-            // Close session explicitly to ensure proper cleanup
+            // Close session before clearing response
             if ($app->has('session')) {
                 try {
                     $session = $app->get('session', false);
@@ -104,12 +124,46 @@ class RequestDispatcher extends BaseObject implements RequestDispatcherInterface
                         $session->close();
                     }
                 } catch (\Throwable $e) {
-                    // Silently handle session close errors to prevent breaking the response
+                    // Ignore errors
+                }
+            }
+            
+            // Clear response data
+            $yiiResponse->data = null;
+            $yiiResponse->content = null;
+            $yiiResponse->stream = null;
+            if (property_exists($yiiResponse, '_headers')) {
+                $yiiResponse->_headers = null;
+            }
+            if (property_exists($yiiResponse, '_cookies')) {
+                $yiiResponse->_cookies = null;
+            }
+            $yiiResponse->clear();
+            $yiiResponse->format = YiiResponse::FORMAT_HTML;
+            
+            // Clear request data
+            if ($yiiRequest instanceof YiiRequest) {
+                $yiiRequest->setBodyParams([]);
+                $yiiRequest->setQueryParams([]);
+                $yiiRequest->setRawBody('');
+                
+                if (method_exists($yiiRequest, 'getHeaders')) {
+                    $headers = $yiiRequest->getHeaders();
+                    if (method_exists($headers, 'removeAll')) {
+                        $headers->removeAll();
+                    }
+                }
+                if (method_exists($yiiRequest, 'getCookies')) {
+                    $cookies = $yiiRequest->getCookies();
+                    if (method_exists($cookies, 'removeAll') && !$cookies->readOnly) {
+                        $cookies->readOnly = false;
+                        $cookies->removeAll();
+                        $cookies->readOnly = true;
+                    }
                 }
             }
             
             $this->flushLogger($app);
-
             $restoreGlobals();
 
             if ($app instanceof CoroutineApplication) {
@@ -117,6 +171,7 @@ class RequestDispatcher extends BaseObject implements RequestDispatcherInterface
             }
 
             $this->restorePreviousApplication($previousApp);
+            unset($yiiRequest, $yiiResponse, $restoreGlobals);
         }
     }
 
@@ -189,7 +244,8 @@ class RequestDispatcher extends BaseObject implements RequestDispatcherInterface
         $logger = $log->getLogger();
 
         if ($logger instanceof Logger) {
-            $logger->flush();
+            $logger->flush(true);
+            $logger->messages = [];
         }
     }
 
@@ -204,6 +260,13 @@ class RequestDispatcher extends BaseObject implements RequestDispatcherInterface
 
         if ($logger instanceof Logger) {
             $logger->flush(true);
+            $logger->messages = [];
+            
+            foreach ($log->targets as $target) {
+                if ($target instanceof \yii\log\Target) {
+                    $target->messages = [];
+                }
+            }
         }
     }
 
