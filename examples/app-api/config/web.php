@@ -9,7 +9,7 @@ $config = [
     'components' => [
         'request' => [
             'cookieValidationKey' => 'test-secret-key',
-            'enableCsrfValidation' => false, // Disable CSRF for API
+            'enableCsrfValidation' => false,
             'parsers' => [
                 'application/json' => 'yii\web\JsonParser',
             ],
@@ -34,18 +34,18 @@ $config = [
             'targets' => [
                 [
                     'class' => \Dacheng\Yii2\Swoole\Log\CoroutineFileTarget::class,
-                    'levels' => ['error', 'warning', 'info'],
+                    'levels' => ['error', 'warning'],
                     'exportInterval' => 1,
                     'logFile' => '@runtime/logs/app.log',
                     'channelSize' => (int)(getenv('YII_LOG_CHANNEL_SIZE') ?: 10000),
                     'pushTimeout' => 0.5,
-                    'batchSize' => 1000, // Packets per batch write
-                    'maxFileSize' => 10240, // 10MB
+                    'batchSize' => 1000,
+                    'maxFileSize' => 10240,
                     'maxLogFiles' => 5,
                     'enableRotation' => true,
                     'categories' => [],
                     'except' => [],
-                    'logVars' => [],
+                    'logVars' => false,
                     'microtime' => true,
                 ],
             ],
@@ -65,7 +65,6 @@ $config = [
 $config = \yii\helpers\ArrayHelper::merge($commonConfig, $config);
 
 if (YII_ENV_DEV) {
-    // configuration adjustments for 'dev' environment when optional packages are present
     if (class_exists('yii\\debug\\Module')) {
         $config['bootstrap'][] = 'debug';
         $config['modules']['debug'] = [
