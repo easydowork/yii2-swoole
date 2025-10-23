@@ -74,7 +74,6 @@ class RequestDispatcher extends BaseObject implements RequestDispatcherInterface
 
         $yiiResponse = $app->getResponse();
         $yiiResponse->clear();
-        $yiiResponse->format = YiiResponse::FORMAT_HTML;
         $this->prepareLogger($app);
 
         try {
@@ -139,7 +138,6 @@ class RequestDispatcher extends BaseObject implements RequestDispatcherInterface
                 $yiiResponse->_cookies = null;
             }
             $yiiResponse->clear();
-            $yiiResponse->format = YiiResponse::FORMAT_HTML;
             
             // Clear request data
             if ($yiiRequest instanceof YiiRequest) {
@@ -191,27 +189,37 @@ class RequestDispatcher extends BaseObject implements RequestDispatcherInterface
             $errorHandler->exception = $exception;
             $errorHandler->logException($exception);
 
-            $bufferLevel = ob_get_level();
-            ob_start();
-            try {
-                $this->invokeErrorHandlerRenderException($errorHandler, $exception);
-                $bufferedOutput = ob_get_contents() ?: '';
-            } finally {
-                while (ob_get_level() > $bufferLevel) {
-                    ob_end_clean();
-                }
-
-                $errorHandler->exception = null;
-            }
-
             $yiiResponse = $app->getResponse();
             if ($yiiResponse->isSent) {
                 $yiiResponse->isSent = false;
             }
 
-            if ($yiiResponse->content === null) {
-                $yiiResponse->content = $bufferedOutput;
+            if ($exception instanceof \yii\web\HttpException) {
+                $yiiResponse->setStatusCode($exception->statusCode);
+            } else {
+                $yiiResponse->setStatusCode(500);
             }
+
+            if ($yiiResponse->format === YiiResponse::FORMAT_JSON) {
+                $yiiResponse->data = $this->convertExceptionToArray($exception, $errorHandler);
+            } else {
+                $bufferLevel = ob_get_level();
+                ob_start();
+                try {
+                    $this->invokeErrorHandlerRenderException($errorHandler, $exception);
+                    $bufferedOutput = ob_get_contents() ?: '';
+                } finally {
+                    while (ob_get_level() > $bufferLevel) {
+                        ob_end_clean();
+                    }
+                }
+
+                if ($yiiResponse->content === null) {
+                    $yiiResponse->content = $bufferedOutput;
+                }
+            }
+
+            $errorHandler->exception = null;
 
             if ($this->isWritable($swooleResponse)) {
                 $this->finalizeResponse($swooleResponse, $yiiResponse);
@@ -223,6 +231,40 @@ class RequestDispatcher extends BaseObject implements RequestDispatcherInterface
 
             return false;
         }
+    }
+
+    private function convertExceptionToArray(Throwable $exception, ErrorHandler $errorHandler): array
+    {
+        if (!defined('YII_DEBUG') || !YII_DEBUG) {
+            if (!($exception instanceof \yii\base\UserException) && !($exception instanceof \yii\web\HttpException)) {
+                $exception = new \yii\web\HttpException(500, Yii::t('yii', 'An internal server error occurred.'));
+            }
+        }
+
+        $array = [
+            'name' => ($exception instanceof \yii\base\Exception || $exception instanceof \yii\base\ErrorException) 
+                ? $exception->getName() 
+                : 'Exception',
+            'message' => $exception->getMessage(),
+            'code' => $exception->getCode(),
+        ];
+
+        if ($exception instanceof \yii\web\HttpException) {
+            $array['status'] = $exception->statusCode;
+        }
+
+        if (defined('YII_DEBUG') && YII_DEBUG) {
+            $array['type'] = get_class($exception);
+            $array['file'] = $exception->getFile();
+            $array['line'] = $exception->getLine();
+            $array['stack-trace'] = explode("\n", $exception->getTraceAsString());
+        }
+
+        if (($prev = $exception->getPrevious()) !== null) {
+            $array['previous'] = $this->convertExceptionToArray($prev, $errorHandler);
+        }
+
+        return $array;
     }
 
     private function invokeErrorHandlerRenderException(ErrorHandler $errorHandler, Throwable $exception): void

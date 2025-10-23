@@ -14,6 +14,9 @@ $config = [
                 'application/json' => 'yii\web\JsonParser',
             ],
         ],
+        'response' => [
+            'format' => \yii\web\Response::FORMAT_JSON,
+        ],
         'session' => [
             'class' => \Dacheng\Yii2\Swoole\Session\CoroutineSession::class,
             'redis' => 'redis',
@@ -24,9 +27,6 @@ $config = [
             'class' => \Dacheng\Yii2\Swoole\User\CoroutineUser::class,
             'identityClass' => \app\models\UserIdentity::class,
             'enableAutoLogin' => false,
-        ],
-        'errorHandler' => [
-            'errorAction' => 'site/error',
         ],
         'log' => [
             'traceLevel' => YII_DEBUG ? 3 : 0,
