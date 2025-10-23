@@ -24,23 +24,14 @@ return [
             'poolWaitTimeout' => (float)(getenv('YII_REDIS_POOL_WAIT_TIMEOUT') ?: 5.0),
         ],
         'cache' => [
-            'class' => \yii\caching\ArrayCache::class,
+            // TODO: Use RedisCache for production
+            'class' => \yii\caching\DummyCache::class,
         ],
         'queue' => [
             'class' => \Dacheng\Yii2\Swoole\Queue\CoroutineRedisQueue::class,
-            'redis' => 'redis', // Reference to redis component
-            'channel' => 'queue', // Redis key prefix for queue data
-            
-            // Concurrency settings:
-            // - Set to 1 for serial processing (safe, compatible with all job types)
-            // - Set to 10-50 for I/O intensive jobs (database queries, API calls, file operations)
-            // - Set to 100+ for lightweight jobs with minimal processing
-            // Note: Each concurrent worker runs in a separate coroutine
+            'redis' => 'redis',
+            'channel' => 'queue',
             'concurrency' => (int)(getenv('YII_QUEUE_CONCURRENCY') ?: 10),
-            
-            // Inline execution (recommended for coroutine context):
-            // - true: Execute jobs in the same process (faster, lower overhead)
-            // - false: Fork child processes for each job (slower, better isolation)
             'executeInline' => true,
         ],
         'db' => [
@@ -51,8 +42,8 @@ return [
             'charset' => 'utf8mb4',
             'poolMaxActive' => (int)(getenv('YII_DB_POOL_MAX_ACTIVE') ?: 10),
             'poolWaitTimeout' => (float)(getenv('YII_DB_POOL_WAIT_TIMEOUT') ?: 5.0),
-            'enableSchemaCache' => true,
-            'schemaCacheDuration' => (int)(getenv('YII_DB_SCHEMA_CACHE_DURATION') ?: 3600),
+            'enableSchemaCache' => false,
+            'schemaCacheDuration' => 0,
             'schemaCache' => 'cache',
         ],
         'swooleHttpServer' => [
