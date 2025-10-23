@@ -55,6 +55,18 @@ curl -b cookies.txt http://localhost:9501/site/get-cookie
 curl http://localhost:9501/site/sleep?seconds=2
 ```
 
+### Health Check
+```bash
+# Comprehensive health check (all services)
+curl http://localhost:9501/health
+
+# Liveness probe (application running)
+curl http://localhost:9501/health/live
+
+# Readiness probe (ready to serve traffic)
+curl http://localhost:9501/health/ready
+```
+
 ### Connection Pools
 
 **Redis Pool:**
@@ -158,6 +170,7 @@ YII_SESSION_TIMEOUT=1440
 | Feature | Controller | Description |
 |---------|------------|-------------|
 | HTTP Server | `SiteController` | Request handling, cookies, coroutine sleep |
+| Health Check | `HealthController` | Monitor application and service health status |
 | Redis Pool | `RedisController` | Connection pooling, concurrent access, benchmarks |
 | DB Pool | `UserController` | Database connection pooling, user queries |
 | Session | `SessionController` | Coroutine-safe session storage via Redis |
