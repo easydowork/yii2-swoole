@@ -22,6 +22,8 @@ class CoroutineApplication extends Application
         'formatter',
         'i18n',
         'log',
+        'errorHandler',
+        'urlManager',
     ];
     
     /**
@@ -111,42 +113,88 @@ class CoroutineApplication extends Application
         }
 
         $store = $this->getCoroutineComponentStore();
+        
+        // Close DB/Redis connections first to return them to pool
+        if (isset($store['db']) && is_object($store['db']) && method_exists($store['db'], 'close')) {
+            try {
+                $store['db']->close();
+            } catch (\Throwable $e) {
+                error_log("[CoroutineApplication] Error closing db: " . $e->getMessage());
+            }
+        }
+        
+        if (isset($store['redis']) && is_object($store['redis']) && method_exists($store['redis'], 'close')) {
+            try {
+                $store['redis']->close();
+            } catch (\Throwable $e) {
+                error_log("[CoroutineApplication] Error closing redis: " . $e->getMessage());
+            }
+        }
+        
+        // Reset user component
         $userComponent = $store['user'] ?? null;
         if (is_object($userComponent) && method_exists($userComponent, 'reset')) {
-            $userComponent->reset();
-            unset($store['user']);
+            try {
+                $userComponent->reset();
+            } catch (\Throwable $e) {
+                // Ignore errors
+            }
         }
+        
+        // Clean up other components
         foreach ($store as $id => $component) {
             if (!is_object($component)) {
                 continue;
             }
             
-            // Skip persistent components that should not be cleared
             if ($this->isPersistentComponent($id)) {
                 continue;
             }
 
+            if ($id === 'db' || $id === 'redis' || $id === 'user') {
+                continue;
+            }
+
             if (method_exists($component, 'close')) {
-                $component->close();
+                try {
+                    $component->close();
+                } catch (\Throwable $e) {
+                    // Ignore errors
+                }
             }
 
             if (method_exists($component, 'reset')) {
-                $component->reset();
+                try {
+                    $component->reset();
+                } catch (\Throwable $e) {
+                    // Ignore errors
+                }
             }
 
             if (method_exists($component, 'clear')) {
-                $component->clear();
+                try {
+                    $component->clear();
+                } catch (\Throwable $e) {
+                    // Ignore errors
+                }
             }
         }
 
         $this->setCoroutineComponentStore([]);
 
+        // Reset application state
         $this->controller = null;
         $this->requestedRoute = null;
         $this->requestedAction = null;
         $this->requestedParams = null;
         $this->requestedModule = null;
         $this->state = self::STATE_BEGIN;
+        
+        // Clear coroutine context
+        $context = Coroutine::getContext();
+        if ($context !== null) {
+            unset($context[self::CONTEXT_COMPONENTS_KEY]);
+        }
     }
 
     protected function isSharedComponent(string $id): bool
@@ -169,7 +217,7 @@ class CoroutineApplication extends Application
     /**
      * @return array<string, mixed>
      */
-    protected function getCoroutineComponentStore(): array
+    public function getCoroutineComponentStore(): array
     {
         $context = Coroutine::getContext();
         $store = $context[self::CONTEXT_COMPONENTS_KEY] ?? [];
