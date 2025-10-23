@@ -1,7 +1,7 @@
 #!/usr/bin/env php
 <?php
 
-// comment out the following two lines when deployed to production
+// Uncomment below only if you need to change from production defaults
 //defined('YII_DEBUG') or define('YII_DEBUG', true);
 //defined('YII_ENV') or define('YII_ENV', 'dev');
 
