@@ -177,8 +177,8 @@ class CoroutineFileTarget extends Target
         $inCoroutine = extension_loaded('swoole') && \Swoole\Coroutine::getCid() > 0;
         
         if (!$inCoroutine) {
-            // Not in coroutine, use sync export
             $this->exportSync();
+            $this->messages = [];
             return;
         }
 
@@ -186,13 +186,14 @@ class CoroutineFileTarget extends Target
         $this->ensureInitialized();
 
         if (!$this->initialized || $this->channel === null) {
-            // Fallback to synchronous writing if not initialized
             $this->exportSync();
+            $this->messages = [];
             return;
         }
 
-        // Format all messages
+        // Format and immediately clear to free memory
         $formattedMessages = array_map([$this, 'formatMessage'], $this->messages);
+        $this->messages = [];
 
         if (empty($formattedMessages)) {
             return;
@@ -208,14 +209,14 @@ class CoroutineFileTarget extends Target
             $pushed = $this->channel->push($messagePacket, $this->pushTimeout);
             
             if (!$pushed) {
-                // Channel is full or timed out, fall back to sync write
-                error_log('[CoroutineFileTarget] Channel push failed, falling back to sync write');
-                $this->exportSync();
+                error_log('[CoroutineFileTarget] Channel push failed, writing synchronously');
+                $this->writeFormattedMessages($formattedMessages);
             }
         } catch (\Throwable $e) {
-            // Channel closed or other error, fall back to sync write
             error_log('[CoroutineFileTarget] Channel error: ' . $e->getMessage());
-            $this->exportSync();
+            $this->writeFormattedMessages($formattedMessages);
+        } finally {
+            unset($formattedMessages);
         }
     }
 
@@ -229,6 +230,18 @@ class CoroutineFileTarget extends Target
         }
 
         $formattedMessages = array_map([$this, 'formatMessage'], $this->messages);
+        $this->writeFormattedMessages($formattedMessages);
+    }
+    
+    /**
+     * Writes formatted messages to log file
+     */
+    private function writeFormattedMessages(array $formattedMessages): void
+    {
+        if (empty($formattedMessages)) {
+            return;
+        }
+
         $text = implode("\n", $formattedMessages) . "\n";
 
         $logPath = dirname($this->logFile);
@@ -244,7 +257,15 @@ class CoroutineFileTarget extends Target
         @flock($fp, LOCK_EX);
         
         if ($this->enableRotation && @filesize($this->logFile) > $this->maxFileSize * 1024) {
+            @flock($fp, LOCK_UN);
+            @fclose($fp);
             $this->rotateFilesSync();
+            
+            if (($fp = @fopen($this->logFile, 'a')) === false) {
+                error_log("Unable to reopen log file after rotation: {$this->logFile}");
+                return;
+            }
+            @flock($fp, LOCK_EX);
         }
 
         @fwrite($fp, $text);
