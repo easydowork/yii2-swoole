@@ -1,7 +1,14 @@
-/vendor
-/.idea/
-/.phpunit.result.cache
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Composer
+/vendor/
 composer.lock
-.phpunit.result.cache
+
+# OS
 .DS_Store
-/app/runtime/
+Thumbs.db
