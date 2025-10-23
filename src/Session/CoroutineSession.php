@@ -19,6 +19,8 @@ class CoroutineSession extends YiiRedisSession
     private bool $deferRegistered = false;
 
     private int $deferCoroutineId = -1;
+    
+    private ?string $_sessionId = null;
 
     public function init()
     {
@@ -47,16 +49,30 @@ class CoroutineSession extends YiiRedisSession
 
     public function open()
     {
-        $this->isClosed = false;
+        if ($this->getIsActive()) {
+            return;
+        }
         
+        $this->isClosed = false;
+
         if ($this->autoCloseOnCoroutineEnd) {
             $this->registerCoroutineCloseHandler();
         }
 
         $this->ensureSessionId();
 
-        parent::open();
-
+        // Load session data from Redis without calling parent::open()
+        // to avoid session_set_save_handler() which fails after headers sent
+        $data = $this->readSession($this->getId());
+        
+        // Unserialize session data
+        if (!empty($data)) {
+            $_SESSION = @unserialize($data) ?: [];
+        } else {
+            $_SESSION = [];
+        }
+        
+        $this->updateFlashCounters();
         $this->ensureResponseCarriesSessionCookie();
     }
 
@@ -72,23 +88,20 @@ class CoroutineSession extends YiiRedisSession
             return;
         }
         
-        // Check if session is actually active before attempting to close
-        if (session_status() !== PHP_SESSION_ACTIVE) {
-            // Session already closed at PHP level, just clean up resources
-            if ($this->redis instanceof CoroutineRedisConnection) {
-                $this->redis->close();
+        // Save session data to Redis BEFORE marking as closed
+        // This must happen before setting isClosed = true
+        if (isset($_SESSION) && is_array($_SESSION) && !empty($_SESSION) && $this->_sessionId !== null) {
+            try {
+                // Serialize session data and write to Redis
+                $data = serialize($_SESSION);
+                $this->writeSession($this->getId(), $data);
+            } catch (\Throwable $e) {
+                \Yii::error('Failed to save session: ' . $e->getMessage(), __METHOD__);
             }
-            $this->deferRegistered = false;
-            $this->deferCoroutineId = -1;
-            $this->isClosed = true;
-            return;
         }
         
+        // NOW mark as closed
         $this->isClosed = true;
-        
-        if ($this->getIsActive()) {
-            parent::close();
-        }
 
         if ($this->redis instanceof CoroutineRedisConnection) {
             $this->redis->close();
@@ -106,10 +119,38 @@ class CoroutineSession extends YiiRedisSession
     {
         $this->close();
     }
+    
+    /**
+     * Override setId to avoid calling session_id() which doesn't work after headers sent
+     */
+    public function setId($value)
+    {
+        $this->_sessionId = $value;
+    }
+    
+    /**
+     * Override getId to avoid calling session_id() which doesn't work after headers sent
+     */
+    public function getId()
+    {
+        if ($this->_sessionId === null) {
+            $this->_sessionId = session_create_id('');
+        }
+        return $this->_sessionId;
+    }
+    
+    /**
+     * Override getIsActive to check our internal state instead of PHP session state
+     */
+    public function getIsActive()
+    {
+        return !$this->isClosed && $this->_sessionId !== null;
+    }
 
     private function registerCoroutineCloseHandler(): void
     {
         $cid = Coroutine::getCid();
+        
         if ($cid < 0) {
             return;
         }
