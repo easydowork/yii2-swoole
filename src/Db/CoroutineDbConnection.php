@@ -56,21 +56,33 @@ class CoroutineDbConnection extends Connection
             return;
         }
 
-        if ($this->released || $this->pdo === null) {
+        if ($this->pdo === null) {
             return;
         }
 
-        $pdo = $this->pdo;
-        $this->released = true;
+        if (!$this->released) {
+            $pdo = $this->pdo;
+            $this->released = true;
 
-        parent::close();
+            parent::close();
 
-        $this->ensurePool()->release($pdo);
+            try {
+                $this->ensurePool()->release($pdo);
+            } catch (\Throwable $e) {
+                error_log('[CoroutineDbConnection] Error releasing connection to pool: ' . $e->getMessage());
+            }
+        } else {
+            parent::close();
+        }
     }
 
     public function reset(): void
     {
-        $this->close();
+        if ($this->pdo !== null && !$this->released) {
+            $this->close();
+        }
+        $this->released = false;
+        $this->pdo = null;
     }
 
     private function ensurePool(): CoroutineConnectionPool
