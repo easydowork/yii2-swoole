@@ -127,10 +127,11 @@ class RequestDispatcher extends BaseObject implements RequestDispatcherInterface
                 }
             }
             
-            // Clear response data
+            // Clear response data and reset format
             $yiiResponse->data = null;
             $yiiResponse->content = null;
             $yiiResponse->stream = null;
+            $yiiResponse->format = YiiResponse::FORMAT_HTML; // Reset to HTML format
             if (property_exists($yiiResponse, '_headers')) {
                 $yiiResponse->_headers = null;
             }
