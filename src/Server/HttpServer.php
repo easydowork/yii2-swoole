@@ -209,14 +209,10 @@ class HttpServer extends Component
                     $this->signalHandler->unregister();
                 }
                 $afterStopEvent();
-                
-                // Important: Mark that server has stopped so shutdown coroutine can exit
-                error_log('[HttpServer] Server stopped, main coroutine exiting');
             }
             });
         } catch (\Swoole\ExitException $e) {
             // Swoole exit is expected during graceful shutdown
-            error_log('[HttpServer] Caught Swoole ExitException during shutdown (expected behavior)');
         }
     }
 
@@ -231,7 +227,6 @@ class HttpServer extends Component
 
         // Priority 10: Wait for in-flight requests
         $this->signalHandler->onShutdown('wait_requests', function () {
-            error_log('[HttpServer] Waiting for in-flight requests to complete...');
             $this->signalHandler->waitForInflightRequests(
                 fn() => $this->activeRequests > 0,
                 5.0
@@ -240,21 +235,19 @@ class HttpServer extends Component
 
         // Priority 20: Stop accepting new requests (shutdown server)
         $this->signalHandler->onShutdown('stop_server', function () {
-            error_log('[HttpServer] Stopping HTTP server...');
             if ($this->server) {
                 $this->server->shutdown();
-                error_log('[HttpServer] Server shutdown() called');
             }
         }, 20);
 
         // Priority 30: Flush logs
         $this->signalHandler->onShutdown('flush_logs', function () {
-            ShutdownHelper::flushLogs(true);
+            ShutdownHelper::flushLogs(false);
         }, 30);
 
         // Priority 40: Close connection pools
         $this->signalHandler->onShutdown('close_pools', function () {
-            ShutdownHelper::closeConnectionPools(true);
+            ShutdownHelper::closeConnectionPools(false);
         }, 40);
     }
 

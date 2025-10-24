@@ -38,17 +38,9 @@ class ShutdownHelper
         }
 
         try {
-            if ($verbose) {
-                error_log('[ShutdownHelper] Flushing logs...');
-            }
-
             // Step 1: Export any remaining messages from logger to targets
             $logger = Yii::$app->log->getLogger();
             if (!empty($logger->messages)) {
-                $messageCount = count($logger->messages);
-                if ($verbose) {
-                    error_log("[ShutdownHelper] Exporting {$messageCount} remaining log messages");
-                }
                 Yii::$app->log->flush(true);
                 
                 // Give a short time for messages to be processed
@@ -65,14 +57,11 @@ class ShutdownHelper
                     if (method_exists($target, 'getWorker')) {
                         $worker = $target->getWorker();
                         if ($worker instanceof LogWorker) {
-                            if ($verbose) {
-                                error_log("[ShutdownHelper] Stopping log worker for target: {$targetName}");
-                            }
                             $worker->stop();
                         }
                     }
                 } catch (\Throwable $e) {
-                    error_log("[ShutdownHelper] Error stopping log worker '{$targetName}': {$e->getMessage()}");
+                    error_log("Error stopping log worker '{$targetName}': {$e->getMessage()}");
                 }
             }
 
@@ -82,16 +71,12 @@ class ShutdownHelper
                     try {
                         $target->shutdown();
                     } catch (\Throwable $e) {
-                        error_log("[ShutdownHelper] Error shutting down log target '{$targetName}': {$e->getMessage()}");
+                        error_log("Error shutting down log target '{$targetName}': {$e->getMessage()}");
                     }
                 }
             }
-            
-            if ($verbose) {
-                error_log('[ShutdownHelper] Log flush complete');
-            }
         } catch (\Throwable $e) {
-            error_log('[ShutdownHelper] Error flushing logs: ' . $e->getMessage());
+            error_log('Error flushing logs: ' . $e->getMessage());
         }
     }
 
@@ -102,24 +87,16 @@ class ShutdownHelper
      */
     public static function closeConnectionPools(bool $verbose = true): void
     {
-        if ($verbose) {
-            error_log('[ShutdownHelper] Closing connection pools...');
-        }
-        
         try {
             CoroutineDbConnection::shutdownAllPools();
         } catch (\Throwable $e) {
-            error_log('[ShutdownHelper] Error closing DB pools: ' . $e->getMessage());
+            error_log('Error closing DB pools: ' . $e->getMessage());
         }
         
         try {
             CoroutineRedisConnection::shutdownAllPools();
         } catch (\Throwable $e) {
-            error_log('[ShutdownHelper] Error closing Redis pools: ' . $e->getMessage());
-        }
-
-        if ($verbose) {
-            error_log('[ShutdownHelper] Connection pools closed');
+            error_log('Error closing Redis pools: ' . $e->getMessage());
         }
     }
 
@@ -133,16 +110,8 @@ class ShutdownHelper
      */
     public static function performGracefulShutdown(bool $verbose = true): void
     {
-        if ($verbose) {
-            error_log('[ShutdownHelper] Starting graceful shutdown sequence...');
-        }
-
         self::flushLogs($verbose);
         self::closeConnectionPools($verbose);
-
-        if ($verbose) {
-            error_log('[ShutdownHelper] Graceful shutdown sequence complete');
-        }
     }
 }
 

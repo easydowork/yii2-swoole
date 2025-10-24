@@ -45,8 +45,6 @@ class SignalHandler
         Process::signal(SIGINT, function (int $signo) {
             $this->handleShutdownSignal($signo);
         });
-        
-        error_log('[SignalHandler] Registered handlers for SIGTERM and SIGINT');
     }
     
     /**
@@ -101,17 +99,16 @@ class SignalHandler
         $signalName = $signo === SIGTERM ? 'SIGTERM' : 'SIGINT';
         
         if ($this->shutdownRequested) {
-            error_log("[SignalHandler] Received {$signalName} again, forcing immediate exit");
+            error_log("Forcing immediate exit");
             exit(1);
         }
         
         $this->shutdownRequested = true;
-        error_log("[SignalHandler] Received {$signalName}, initiating graceful shutdown...");
+        error_log("Shutting down server...");
         
         // Perform graceful shutdown in a coroutine
         Coroutine::create(function () {
             $this->performGracefulShutdown();
-            error_log('[SignalHandler] performGracefulShutdown() completed, shutdown coroutine exiting');
         });
     }
     
@@ -127,8 +124,6 @@ class SignalHandler
         $this->isShuttingDown = true;
         $this->shutdownStartTime = microtime(true);
         
-        error_log('[SignalHandler] Starting graceful shutdown sequence');
-        
         // Sort callbacks by priority
         $callbacks = $this->shutdownCallbacks;
         uasort($callbacks, function ($a, $b) {
@@ -140,25 +135,22 @@ class SignalHandler
             $elapsed = microtime(true) - $this->shutdownStartTime;
             
             if ($elapsed >= self::SHUTDOWN_TIMEOUT) {
-                error_log("[SignalHandler] Shutdown timeout reached, skipping remaining callbacks");
+                error_log("Shutdown timeout reached, skipping remaining callbacks");
                 break;
             }
             
             try {
-                error_log("[SignalHandler] Executing shutdown callback: {$name}");
                 $config['callback']();
             } catch (\Throwable $e) {
-                error_log("[SignalHandler] Error in shutdown callback '{$name}': {$e->getMessage()}");
+                error_log("Error in shutdown callback '{$name}': {$e->getMessage()}");
             }
         }
         
         $totalTime = microtime(true) - $this->shutdownStartTime;
-        error_log(sprintf('[SignalHandler] Graceful shutdown completed in %.3f seconds', $totalTime));
+        error_log(sprintf('Server shutdown completed in %.3f seconds', $totalTime));
         
         // Wait briefly for remaining coroutines to complete
         $this->waitForRemainingCoroutines(0.5);
-
-        error_log('[SignalHandler] Shutdown complete, stopping event loop');
         
         // Exit the event loop gracefully
         if (class_exists('Swoole\\Event', false) && method_exists('Swoole\\Event', 'exit')) {
@@ -178,14 +170,13 @@ class SignalHandler
         
         while (microtime(true) - $startTime < $maxWaitTime) {
             if (!$checkCallback()) {
-                error_log('[SignalHandler] All in-flight requests completed');
                 return;
             }
             
             Coroutine::sleep(self::CHECK_INTERVAL);
         }
         
-        error_log('[SignalHandler] Timeout waiting for in-flight requests, proceeding with shutdown');
+        error_log('Request timeout, proceeding with shutdown');
     }
 
     /**
@@ -203,7 +194,6 @@ class SignalHandler
 
             // Allow for 1-2 coroutines (main + maybe shutdown coroutine)
             if ($coroutines <= 2) {
-                error_log('[SignalHandler] All worker coroutines completed');
                 return;
             }
 
@@ -213,7 +203,7 @@ class SignalHandler
         $stats = Coroutine::stats();
         $remaining = (int)($stats['coroutine_num'] ?? 0);
         if ($remaining > 2) {
-            error_log("[SignalHandler] Warning: {$remaining} coroutines still active after timeout");
+            error_log("Warning: {$remaining} coroutines still active");
         }
     }
 }
