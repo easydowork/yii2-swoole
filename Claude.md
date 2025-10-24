@@ -21,3 +21,8 @@ Yii2 Swoole extension, provides coroutine http server and more coroutine feature
 
 - Always write clean code.
 - Only add necessary comments and avoid redundant comments.
+
+## Git Actions
+
+- Never commit changes without my approval, you should propose commit message and wait for my approval before committing.
+- Commit message should be concise and descriptive, avoid verbose commit messages.
