@@ -127,6 +127,18 @@ class RequestDispatcher extends BaseObject implements RequestDispatcherInterface
                 }
             }
             
+            // Clear view params (breadcrumbs, etc.)
+            if ($app->has('view')) {
+                try {
+                    $view = $app->get('view', false);
+                    if ($view && is_object($view) && property_exists($view, 'params')) {
+                        $view->params = [];
+                    }
+                } catch (\Throwable $e) {
+                    // Ignore errors
+                }
+            }
+            
             // Clear response data and reset format
             $yiiResponse->data = null;
             $yiiResponse->content = null;
