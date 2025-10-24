@@ -66,6 +66,11 @@ class HttpServer extends Component
         'eot' => 'application/vnd.ms-fontobject',
     ];
 
+    /**
+     * @var string|null Custom server header value (default: null to use Swoole's default)
+     */
+    public ?string $serverHeader = null;
+
     private ?SwooleCoroutineHttpServer $server = null;
 
     private bool $isRunning = false;
@@ -169,6 +174,11 @@ class HttpServer extends Component
             $afterStartEvent();
 
             $this->server->handle('/', function (Request $request, Response $response) use ($dispatcher, $server): void {
+                // Set custom server header if configured
+                if ($this->serverHeader !== null) {
+                    $response->header('Server', $this->serverHeader);
+                }
+
                 // Check if shutdown is requested
                 if ($this->signalHandler && $this->signalHandler->isShutdownRequested()) {
                     $response->status(503);
