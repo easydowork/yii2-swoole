@@ -323,7 +323,6 @@ class HttpServer extends Component
         // Set response headers
         $response->status(200);
         $response->header('Content-Type', $this->staticFileExtensions[$extension]);
-        $response->header('Content-Length', (string) strlen($content));
         
         // Add cache headers for static files
         $lastModified = filemtime($realPath);
