@@ -115,6 +115,32 @@ class CoroutineSession extends YiiRedisSession
         $this->deferCoroutineId = -1;
     }
 
+    public function destroy()
+    {
+        if (!$this->getIsActive()) {
+            return;
+        }
+
+        // Remove session data from Redis
+        if ($this->_sessionId !== null) {
+            try {
+                $sessionKey = $this->calculateKey($this->getId());
+                $this->redis->del($sessionKey);
+            } catch (\Throwable $e) {
+                \Yii::error('Failed to destroy session: ' . $e->getMessage(), __METHOD__);
+            }
+        }
+
+        // Clear session data
+        if (isset($_SESSION) && is_array($_SESSION)) {
+            $_SESSION = [];
+        }
+
+        // Reset session ID
+        $this->_sessionId = null;
+        $this->isClosed = true;
+    }
+
     public function reset(): void
     {
         $this->close();
