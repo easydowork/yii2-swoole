@@ -89,9 +89,6 @@ class LogWorker
         }
     }
 
-    /**
-     * Pushes messages directly to the buffer
-     */
     public function pushMessages(array $messages): bool
     {
         if (!$this->running) {
@@ -134,39 +131,23 @@ class LogWorker
             return;
         }
 
-        $fp = @fopen($this->logFile, 'a');
-        if ($fp === false) {
-            error_log("LogWorker: Unable to open log file: {$this->logFile}");
+        $success = @file_put_contents($this->logFile, $text, FILE_APPEND | LOCK_EX);
+        
+        if ($success === false) {
+            error_log("LogWorker: Unable to write to log file: {$this->logFile}");
             return;
         }
-
-        @flock($fp, LOCK_EX);
-
+        
+        if ($this->fileMode !== null) {
+            @chmod($this->logFile, $this->fileMode);
+        }
+        
         if ($this->enableRotation) {
             clearstatcache();
             $fileSize = @filesize($this->logFile);
             if ($fileSize !== false && $fileSize > $this->maxFileSize * 1024) {
-                @flock($fp, LOCK_UN);
-                @fclose($fp);
-                
                 $this->rotateFiles();
-                
-                $fp = @fopen($this->logFile, 'a');
-                if ($fp === false) {
-                    error_log("LogWorker: Unable to reopen log file after rotation: {$this->logFile}");
-                    return;
-                }
-                @flock($fp, LOCK_EX);
             }
-        }
-
-        @fwrite($fp, $text);
-        @fflush($fp);
-        @flock($fp, LOCK_UN);
-        @fclose($fp);
-
-        if ($this->fileMode !== null) {
-            @chmod($this->logFile, $this->fileMode);
         }
     }
 

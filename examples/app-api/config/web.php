@@ -34,15 +34,15 @@ $config = [
             'targets' => [
                 [
                     'class' => \Dacheng\Yii2\Swoole\Log\CoroutineFileTarget::class,
-                    'levels' => ['error', 'warning'],
+                    'levels' => YII_DEBUG ? ['error', 'warning', 'info'] : ['error', 'warning'],
                     'exportInterval' => 1,
                     'logFile' => '@runtime/logs/app.log',
-                    'maxFileSize' => 10240,
+                    'maxFileSize' => 10240, // 10MB
                     'maxLogFiles' => 5,
                     'enableRotation' => true,
                     'categories' => [],
                     'except' => [],
-                    'logVars' => false,
+                    'logVars' => [],
                     'microtime' => true,
                 ],
             ],

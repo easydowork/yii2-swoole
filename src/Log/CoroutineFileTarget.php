@@ -57,8 +57,6 @@ class CoroutineFileTarget extends Target
 
         $this->maxLogFiles = max(1, $this->maxLogFiles);
         $this->maxFileSize = max(1, $this->maxFileSize);
-
-        $this->ensureInitialized();
     }
 
     private function ensureInitialized(): void
@@ -67,19 +65,17 @@ class CoroutineFileTarget extends Target
             return;
         }
 
-        if (\Swoole\Coroutine::getCid() > 0) {
-            $this->worker = new LogWorker(
-                $this->logFile,
-                $this->enableRotation,
-                $this->maxFileSize,
-                $this->maxLogFiles,
-                $this->fileMode,
-                $this->dirMode
-            );
+        $this->worker = new LogWorker(
+            $this->logFile,
+            $this->enableRotation,
+            $this->maxFileSize,
+            $this->maxLogFiles,
+            $this->fileMode,
+            $this->dirMode
+        );
 
-            $this->worker->start();
-            $this->initialized = true;
-        }
+        $this->worker->start();
+        $this->initialized = true;
     }
 
     public function export()
@@ -97,12 +93,6 @@ class CoroutineFileTarget extends Target
         }
 
         $this->ensureInitialized();
-
-        if (!$this->initialized || $this->worker === null) {
-            $this->exportSync();
-            $this->messages = [];
-            return;
-        }
 
         $formattedMessages = array_map([$this, 'formatMessage'], $this->messages);
         $this->messages = [];
@@ -224,7 +214,6 @@ class CoroutineFileTarget extends Target
 
         $this->initialized = false;
     }
-
 
     public function __destruct()
     {

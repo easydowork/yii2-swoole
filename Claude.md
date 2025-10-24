@@ -1,4 +1,4 @@
-# Agent.md
+# Claude.md
 
 ## Project Objective
 
@@ -16,3 +16,8 @@ Yii2 Swoole extension, provides coroutine http server and more coroutine feature
 
 - examples/: yii2 applications for demonstrating how to use yii2-swoole
 - src/: yii2-swoole extension for integrating swoole coroutine into yii2
+
+## Coding Standards
+
+- Always write clean code.
+- Only add necessary comments and avoid redundant comments.

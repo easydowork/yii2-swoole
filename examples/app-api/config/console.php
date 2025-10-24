@@ -17,7 +17,7 @@ $config = [
             'targets' => [
                 [
                     'class' => \Dacheng\Yii2\Swoole\Log\CoroutineFileTarget::class,
-                    'levels' => ['error', 'warning', 'info'],
+                    'levels' => YII_DEBUG ? ['error', 'warning', 'info'] : ['error', 'warning'],
                     'exportInterval' => 1,
                     'logFile' => '@runtime/logs/console.log',
                     'maxFileSize' => 10240, // 10MB
