@@ -1,6 +1,5 @@
 {
   "name": "dacheng-php/yii2-swoole",
-  "version": "1.0.0-dev",
   "description": "Yii2 Swoole extension, provides coroutine http server and more coroutine features.",
   "keywords": [
     "Yii2",
