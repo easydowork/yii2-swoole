@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Dacheng\Yii2\Swoole\Server;
 
 use Dacheng\Yii2\Swoole\Db\CoroutineDbConnection;
-use Dacheng\Yii2\Swoole\Log\LogWorker;
 use Dacheng\Yii2\Swoole\Redis\CoroutineRedisConnection;
 use Swoole\Coroutine;
 use Swoole\Coroutine\Http\Server as SwooleCoroutineHttpServer;
@@ -146,7 +145,8 @@ class HttpServer extends Component
         $this->setupShutdownCallbacks();
         $this->signalHandler->register();
 
-        Coroutine\run(function () use ($factory, $host, $port, $settings, $dispatcher, $afterStartEvent, $afterStopEvent): void {
+        try {
+            Coroutine\run(function () use ($factory, $host, $port, $settings, $dispatcher, $afterStartEvent, $afterStopEvent): void {
             $this->server = $factory($host, $port);
 
             // Apply relevant settings for coroutine server
@@ -209,8 +209,15 @@ class HttpServer extends Component
                     $this->signalHandler->unregister();
                 }
                 $afterStopEvent();
+                
+                // Important: Mark that server has stopped so shutdown coroutine can exit
+                error_log('[HttpServer] Server stopped, main coroutine exiting');
             }
-        });
+            });
+        } catch (\Swoole\ExitException $e) {
+            // Swoole exit is expected during graceful shutdown
+            error_log('[HttpServer] Caught Swoole ExitException during shutdown (expected behavior)');
+        }
     }
 
     /**
@@ -236,55 +243,18 @@ class HttpServer extends Component
             error_log('[HttpServer] Stopping HTTP server...');
             if ($this->server) {
                 $this->server->shutdown();
+                error_log('[HttpServer] Server shutdown() called');
             }
         }, 20);
 
         // Priority 30: Flush logs
         $this->signalHandler->onShutdown('flush_logs', function () {
-            error_log('[HttpServer] Flushing logs...');
-            if (\Yii::$app->has('log')) {
-                try {
-                    // Stop log workers first
-                    foreach (\Yii::$app->log->targets as $target) {
-                        if (method_exists($target, 'getWorker')) {
-                            $worker = $target->getWorker();
-                            if ($worker instanceof LogWorker) {
-                                $worker->stop();
-                            }
-                        }
-                    }
-                    
-                    // Then export/flush remaining messages
-                    foreach (\Yii::$app->log->targets as $target) {
-                        if (method_exists($target, 'export')) {
-                            $messages = \Yii::$app->log->getLogger()->messages;
-                            if (!empty($messages)) {
-                                $target->collect($messages, true);
-                                $target->export();
-                            }
-                        }
-                    }
-                } catch (\Throwable $e) {
-                    error_log('[HttpServer] Error flushing logs: ' . $e->getMessage());
-                }
-            }
+            ShutdownHelper::flushLogs(true);
         }, 30);
 
         // Priority 40: Close connection pools
         $this->signalHandler->onShutdown('close_pools', function () {
-            error_log('[HttpServer] Closing connection pools...');
-            
-            try {
-                CoroutineDbConnection::shutdownAllPools();
-            } catch (\Throwable $e) {
-                error_log('[HttpServer] Error closing DB pools: ' . $e->getMessage());
-            }
-            
-            try {
-                CoroutineRedisConnection::shutdownAllPools();
-            } catch (\Throwable $e) {
-                error_log('[HttpServer] Error closing Redis pools: ' . $e->getMessage());
-            }
+            ShutdownHelper::closeConnectionPools(true);
         }, 40);
     }
 

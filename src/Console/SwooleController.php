@@ -64,7 +64,20 @@ class SwooleController extends Controller
 
         $this->stdout(sprintf("Swoole HTTP server listening on %s:%d\n", $server->host, $server->port));
 
-        $server->start();
+        try {
+            $server->start();
+        } catch (\Swoole\ExitException $e) {
+            // ExitException is thrown during graceful shutdown, this is expected
+            $exitCode = method_exists($e, 'getStatus') ? $e->getStatus() : 0;
+            
+            if ($exitCode === 0) {
+                $this->stdout("Swoole HTTP server stopped gracefully.\n");
+                return ExitCode::OK;
+            }
+
+            $this->stderr(sprintf("Swoole HTTP server exited with code %d: %s\n", $exitCode, $e->getMessage()));
+            return $exitCode;
+        }
 
         return ExitCode::OK;
     }

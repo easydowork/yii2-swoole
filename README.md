@@ -106,7 +106,9 @@ return [
                     'class' => \Dacheng\Yii2\Swoole\Log\CoroutineFileTarget::class,
                     'levels' => ['error', 'warning'],
                     'logFile' => '@runtime/logs/app.log',
-                    'channelSize' => 10000,
+                    'maxFileSize' => 10240, // KB
+                    'maxLogFiles' => 5,
+                    'enableRotation' => true,
                 ],
             ],
         ],
@@ -230,11 +232,11 @@ curl http://127.0.0.1:9501/
     'targets' => [
         [
             'class' => \Dacheng\Yii2\Swoole\Log\CoroutineFileTarget::class,
-            'channelSize' => 10000,    // Channel buffer size
-            'pushTimeout' => 0.5,      // Timeout for pushing to channel
-            'batchSize' => 1000,       // Messages per batch write
+            'levels' => ['error', 'warning'],
+            'logFile' => '@runtime/logs/app.log',
             'maxFileSize' => 10240,    // Max file size before rotation (KB)
             'maxLogFiles' => 5,        // Number of rotated files to keep
+            'enableRotation' => true,  // Enable log rotation
         ],
     ],
 ],

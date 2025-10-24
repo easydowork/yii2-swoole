@@ -199,8 +199,6 @@ class LogController extends Controller
             $lineCount = count(file($logFile));
         }
 
-        $channelStats = $logTarget->getChannelStats();
-
         $result = [
             'success' => true,
             'log_file' => $logFile,
@@ -210,14 +208,9 @@ class LogController extends Controller
             'line_count' => $lineCount,
             'max_file_size_kb' => $logTarget->maxFileSize,
             'max_log_files' => $logTarget->maxLogFiles,
-            'channel_size' => $logTarget->channelSize,
-            'push_timeout' => $logTarget->pushTimeout,
             'rotation_enabled' => $logTarget->enableRotation,
+            'worker_initialized' => $logTarget->getWorker() !== null,
         ];
-
-        if ($channelStats !== null) {
-            $result['channel'] = $channelStats;
-        }
 
         return $result;
     }

@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace Dacheng\Yii2\Swoole\Queue;
 
-use Dacheng\Yii2\Swoole\Db\CoroutineDbConnection;
-use Dacheng\Yii2\Swoole\Log\LogWorker;
-use Dacheng\Yii2\Swoole\Redis\CoroutineRedisConnection;
 use Swoole\Coroutine;
 use Swoole\Process;
 use yii\console\Exception;
@@ -140,25 +137,7 @@ class CoroutineRedisCommand extends CliCommand
             
             // Wait for remaining coroutines with timeout
             if (extension_loaded('swoole')) {
-                $stats = Coroutine::stats();
-                
-                if ($stats['coroutine_num'] > 1) {
-                    $maxWait = 2.0;
-                    $waited = 0.0;
-                    
-                    while ($stats['coroutine_num'] > 1 && $waited < $maxWait) {
-                        Coroutine::sleep(0.1);
-                        $waited += 0.1;
-                        $stats = Coroutine::stats();
-                    }
-                    
-                    // If coroutines still exist, set up safety timer as last resort
-                    if ($stats['coroutine_num'] > 1) {
-                        \Swoole\Timer::after(2000, function() {
-                            posix_kill(getmypid(), SIGKILL);
-                        });
-                    }
-                }
+                $this->waitForRemainingCoroutines(2.0);
             }
         }
         
@@ -244,58 +223,10 @@ class CoroutineRedisCommand extends CliCommand
      */
     protected function performGracefulShutdown(): void
     {
-        $this->stdout("Flushing logs...\n");
+        $this->stdout("Starting graceful shutdown...\n");
         
-        // Stop log workers first
-        if (\Yii::$app->has('log')) {
-            try {
-                foreach (\Yii::$app->log->targets as $target) {
-                    if (method_exists($target, 'getWorker')) {
-                        $worker = $target->getWorker();
-                        if ($worker instanceof LogWorker) {
-                            $worker->stop();
-                            
-                            // Brief pause to let worker coroutine exit
-                            if (extension_loaded('swoole')) {
-                                Coroutine::sleep(0.05);
-                            } else {
-                                usleep(50000);
-                            }
-                        }
-                    }
-                }
-                
-                // Export remaining messages synchronously
-                foreach (\Yii::$app->log->targets as $target) {
-                    if (method_exists($target, 'export')) {
-                        $messages = \Yii::$app->log->getLogger()->messages;
-                        if (!empty($messages)) {
-                            $target->collect($messages, true);
-                            $target->export();
-                        }
-                    }
-                }
-                
-                $this->stdout("Logs flushed\n");
-            } catch (\Throwable $e) {
-                $this->stderr("Error flushing logs: {$e->getMessage()}\n");
-            }
-        }
-
-        $this->stdout("Closing connection pools...\n");
-        
-        // Close connection pools
-        try {
-            CoroutineDbConnection::shutdownAllPools();
-        } catch (\Throwable $e) {
-            $this->stderr("Error closing DB pools: {$e->getMessage()}\n");
-        }
-        
-        try {
-            CoroutineRedisConnection::shutdownAllPools();
-        } catch (\Throwable $e) {
-            $this->stderr("Error closing Redis pools: {$e->getMessage()}\n");
-        }
+        // Use ShutdownHelper for consistent shutdown behavior
+        \Dacheng\Yii2\Swoole\Server\ShutdownHelper::performGracefulShutdown(false);
 
         // Unregister signal handlers
         $this->unregisterSignalHandlers();
@@ -314,5 +245,34 @@ class CoroutineRedisCommand extends CliCommand
 
         Process::signal(SIGTERM, null);
         Process::signal(SIGINT, null);
+    }
+
+    /**
+     * Waits for remaining coroutines to complete with timeout
+     * 
+     * @param float $maxWait Maximum time to wait in seconds
+     */
+    protected function waitForRemainingCoroutines(float $maxWait): void
+    {
+        $stats = Coroutine::stats();
+        
+        if ($stats['coroutine_num'] <= 1) {
+            return;
+        }
+        
+        $this->stdout("Waiting for " . ($stats['coroutine_num'] - 1) . " remaining coroutines...\n");
+        
+        $waited = 0.0;
+        while ($stats['coroutine_num'] > 1 && $waited < $maxWait) {
+            Coroutine::sleep(0.1);
+            $waited += 0.1;
+            $stats = Coroutine::stats();
+        }
+        
+        if ($stats['coroutine_num'] > 1) {
+            $this->stdout("Warning: " . ($stats['coroutine_num'] - 1) . " coroutines still active after timeout\n");
+        } else {
+            $this->stdout("All coroutines completed\n");
+        }
     }
 }

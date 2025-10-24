@@ -111,6 +111,7 @@ class SignalHandler
         // Perform graceful shutdown in a coroutine
         Coroutine::create(function () {
             $this->performGracefulShutdown();
+            error_log('[SignalHandler] performGracefulShutdown() completed, shutdown coroutine exiting');
         });
     }
     
@@ -153,6 +154,16 @@ class SignalHandler
         
         $totalTime = microtime(true) - $this->shutdownStartTime;
         error_log(sprintf('[SignalHandler] Graceful shutdown completed in %.3f seconds', $totalTime));
+        
+        // Wait briefly for remaining coroutines to complete
+        $this->waitForRemainingCoroutines(0.5);
+
+        error_log('[SignalHandler] Shutdown complete, stopping event loop');
+        
+        // Exit the event loop gracefully
+        if (class_exists('Swoole\\Event', false) && method_exists('Swoole\\Event', 'exit')) {
+            \Swoole\Event::exit();
+        }
     }
     
     /**
@@ -175,5 +186,34 @@ class SignalHandler
         }
         
         error_log('[SignalHandler] Timeout waiting for in-flight requests, proceeding with shutdown');
+    }
+
+    /**
+     * Waits for remaining coroutines to complete
+     * 
+     * @param float $maxWaitTime Maximum time to wait in seconds
+     */
+    private function waitForRemainingCoroutines(float $maxWaitTime): void
+    {
+        $startTime = microtime(true);
+        
+        while (microtime(true) - $startTime < $maxWaitTime) {
+            $stats = Coroutine::stats();
+            $coroutines = (int)($stats['coroutine_num'] ?? 0);
+
+            // Allow for 1-2 coroutines (main + maybe shutdown coroutine)
+            if ($coroutines <= 2) {
+                error_log('[SignalHandler] All worker coroutines completed');
+                return;
+            }
+
+            Coroutine::sleep(self::CHECK_INTERVAL);
+        }
+        
+        $stats = Coroutine::stats();
+        $remaining = (int)($stats['coroutine_num'] ?? 0);
+        if ($remaining > 2) {
+            error_log("[SignalHandler] Warning: {$remaining} coroutines still active after timeout");
+        }
     }
 }
