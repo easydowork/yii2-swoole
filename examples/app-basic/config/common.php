@@ -24,13 +24,14 @@ return [
             'poolWaitTimeout' => (float)(getenv('YII_REDIS_POOL_WAIT_TIMEOUT') ?: 5.0),
         ],
         'cache' => [
-            // TODO: Use RedisCache for production
-            'class' => \yii\caching\DummyCache::class,
+            'class' => \Dacheng\Yii2\Swoole\Cache\CoroutineRedisCache::class,
+            'redis' => 'redis',
+            'keyPrefix' => 'yii2-cache:',
         ],
         'queue' => [
             'class' => \Dacheng\Yii2\Swoole\Queue\CoroutineRedisQueue::class,
             'redis' => 'redis',
-            'channel' => 'queue',
+            'channel' => 'yii2-queue:',
             'concurrency' => (int)(getenv('YII_QUEUE_CONCURRENCY') ?: 10),
             'executeInline' => true,
         ],
@@ -42,8 +43,8 @@ return [
             'charset' => 'utf8mb4',
             'poolMaxActive' => (int)(getenv('YII_DB_POOL_MAX_ACTIVE') ?: 10),
             'poolWaitTimeout' => (float)(getenv('YII_DB_POOL_WAIT_TIMEOUT') ?: 5.0),
-            'enableSchemaCache' => false,
-            'schemaCacheDuration' => 0,
+            'enableSchemaCache' => true,
+            'schemaCacheDuration' => 3600,
             'schemaCache' => 'cache',
         ],
         'swooleHttpServer' => [

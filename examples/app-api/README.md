@@ -91,6 +91,33 @@ curl http://localhost:9501/user/view?id=1
 curl http://localhost:9501/session/counter
 ```
 
+### Cache System
+```bash
+# Basic cache operations
+curl http://localhost:9501/cache
+
+# Check cache existence
+curl http://localhost:9501/cache/exists
+
+# Multi-set and multi-get
+curl http://localhost:9501/cache/multiple
+
+# Add operation (only set if not exists)
+curl http://localhost:9501/cache/add
+
+# Delete cache
+curl http://localhost:9501/cache/delete
+
+# Cache with dependencies
+curl http://localhost:9501/cache/dependency
+
+# Cache expiration test
+curl http://localhost:9501/cache/expire
+
+# Performance benchmark
+curl http://localhost:9501/cache/benchmark
+```
+
 ### Queue System
 ```bash
 # Push job to queue
@@ -172,6 +199,7 @@ YII_SESSION_TIMEOUT=1440
 | HTTP Server | `SiteController` | Request handling, cookies, coroutine sleep |
 | Health Check | `HealthController` | Monitor application and service health status |
 | Redis Pool | `RedisController` | Connection pooling, concurrent access, benchmarks |
+| Cache Pool | `CacheController` | Coroutine-safe cache with Redis backend |
 | DB Pool | `UserController` | Database connection pooling, user queries |
 | Session | `SessionController` | Coroutine-safe session storage via Redis |
 | Queue | `QueueController` | Background job processing with coroutines |

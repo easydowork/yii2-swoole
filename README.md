@@ -9,7 +9,7 @@ Yii2 extension for Swoole: High-performance single-process asynchronous HTTP ser
 - **Automatic Connection Pooling** - MySQL and Redis connection reuse
 - **Async Job Queue** - Redis-based queue with concurrent processing
 - **Non-blocking Logging** - Async file logging with channel buffering
-- **Coroutine Components** - Session, User, DB, Redis all coroutine-safe
+- **Coroutine Components** - Session, User, DB, Redis, Cache all coroutine-safe
 - **Graceful Shutdown** - Clean shutdown of pools, workers, and connections
 - **Static File Serving** - Built-in support for CSS, JS, images, fonts
 
@@ -89,6 +89,12 @@ return [
             'database' => 0,
             'poolMaxActive' => 32,
             'poolWaitTimeout' => 3.0,
+        ],
+        
+        // Cache with Redis Pool
+        'cache' => [
+            'class' => \Dacheng\Yii2\Swoole\Cache\CoroutineRedisCache::class,
+            'redis' => 'redis',
         ],
         
         // Async Queue
@@ -213,6 +219,16 @@ curl http://127.0.0.1:9501/
 ],
 ```
 
+#### Cache Options
+
+```php
+'cache' => [
+    'class' => \Dacheng\Yii2\Swoole\Cache\CoroutineRedisCache::class,
+    'redis' => 'redis',               // Reference to redis component
+    'keyPrefix' => 'myapp:',          // Optional key prefix
+],
+```
+
 #### Queue Options
 
 ```php
@@ -263,6 +279,27 @@ $value = Yii::$app->redis->get('key');
 Yii::$app->redis->set('key', 'value');
 
 // Connection returned to pool automatically
+```
+
+#### Using Cache
+
+```php
+// Set cache with TTL
+Yii::$app->cache->set('key', 'value', 3600);
+
+// Get cache
+$value = Yii::$app->cache->get('key');
+
+// Multi-set
+Yii::$app->cache->multiSet([
+    'user:1' => ['id' => 1, 'name' => 'Alice'],
+    'user:2' => ['id' => 2, 'name' => 'Bob'],
+], 3600);
+
+// Multi-get
+$users = Yii::$app->cache->multiGet(['user:1', 'user:2']);
+
+// Connection pool shared with redis component
 ```
 
 #### Queue Jobs
