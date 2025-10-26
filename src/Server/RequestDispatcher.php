@@ -35,6 +35,8 @@ class RequestDispatcher extends BaseObject implements RequestDispatcherInterface
 
     private ?string $entryScript = null;
 
+    private ?string $defaultResponseFormat = null;
+
     private static ?\ReflectionMethod $renderExceptionMethod = null;
 
     private static ?\ReflectionMethod $sendContentMethod = null;
@@ -74,6 +76,12 @@ class RequestDispatcher extends BaseObject implements RequestDispatcherInterface
 
         $yiiResponse = $app->getResponse();
         $yiiResponse->clear();
+        
+        // Store the default response format from config on first request
+        if ($this->defaultResponseFormat === null) {
+            $this->defaultResponseFormat = $yiiResponse->format;
+        }
+        
         $this->prepareLogger($app);
 
         try {
@@ -139,11 +147,11 @@ class RequestDispatcher extends BaseObject implements RequestDispatcherInterface
                 }
             }
             
-            // Clear response data and reset format
+            // Clear response data and reset format to the configured default
             $yiiResponse->data = null;
             $yiiResponse->content = null;
             $yiiResponse->stream = null;
-            $yiiResponse->format = YiiResponse::FORMAT_HTML; // Reset to HTML format
+            $yiiResponse->format = $this->defaultResponseFormat ?? YiiResponse::FORMAT_HTML;
             if (property_exists($yiiResponse, '_headers')) {
                 $yiiResponse->_headers = null;
             }
