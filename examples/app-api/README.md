@@ -118,6 +118,27 @@ curl http://localhost:9501/cache/expire
 curl http://localhost:9501/cache/benchmark
 ```
 
+### HTTP Client
+```bash
+# Simple GET request
+curl http://localhost:9501/http-client
+
+# POST request with JSON
+curl http://localhost:9501/http-client/post
+
+# Batch requests (parallel execution)
+curl http://localhost:9501/http-client/batch
+
+# Custom headers
+curl http://localhost:9501/http-client/headers
+
+# Timeout handling
+curl http://localhost:9501/http-client/timeout
+
+# SSL/HTTPS request
+curl http://localhost:9501/http-client/ssl
+```
+
 ### Queue System
 ```bash
 # Push job to queue

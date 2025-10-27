@@ -9,6 +9,7 @@ Yii2 extension for Swoole: High-performance single-process asynchronous HTTP ser
 - **Automatic Connection Pooling** - MySQL and Redis connection reuse
 - **Async Job Queue** - Redis-based queue with concurrent processing
 - **Non-blocking Logging** - Async file logging with channel buffering
+- **Coroutine HTTP Client** - Non-blocking HTTP requests with parallel execution
 - **Coroutine Components** - Session, User, DB, Redis, Cache all coroutine-safe
 - **Graceful Shutdown** - Clean shutdown of pools, workers, and connections
 - **Static File Serving** - Built-in support for CSS, JS, images, fonts
@@ -229,6 +230,21 @@ curl http://127.0.0.1:9501/
 ],
 ```
 
+#### HTTP Client Options
+
+```php
+'httpClient' => [
+    'class' => \Dacheng\Yii2\Swoole\HttpClient\CoroutineClient::class,
+    'baseUrl' => 'https://api.example.com',
+    'transport' => [
+        'class' => \Dacheng\Yii2\Swoole\HttpClient\CoroutineTransport::class,
+        'connectionTimeout' => 3,     // Connection timeout (seconds)
+        'requestTimeout' => 10,       // Request timeout (seconds)
+        'keepAlive' => true,          // Enable keep-alive connections
+    ],
+],
+```
+
 #### Queue Options
 
 ```php
@@ -300,6 +316,44 @@ Yii::$app->cache->multiSet([
 $users = Yii::$app->cache->multiGet(['user:1', 'user:2']);
 
 // Connection pool shared with redis component
+```
+
+#### HTTP Client
+
+```php
+use Dacheng\Yii2\Swoole\HttpClient\CoroutineClient;
+
+// Create client instance
+$client = new CoroutineClient([
+    'baseUrl' => 'https://api.example.com',
+]);
+
+// GET request
+$response = $client->get('users', ['page' => 1])->send();
+if ($response->isOk) {
+    $data = $response->data;
+}
+
+// POST request with JSON
+$response = $client->post('users', ['name' => 'John'])
+    ->setFormat(CoroutineClient::FORMAT_JSON)
+    ->send();
+
+// Batch requests (parallel execution with coroutines)
+$requests = [
+    'users' => $client->get('users'),
+    'posts' => $client->get('posts'),
+    'comments' => $client->get('comments'),
+];
+$responses = $client->batchSend($requests);
+
+// Custom headers
+$response = $client->get('protected')
+    ->addHeaders([
+        'Authorization' => 'Bearer token123',
+        'X-Custom-Header' => 'value',
+    ])
+    ->send();
 ```
 
 #### Queue Jobs
