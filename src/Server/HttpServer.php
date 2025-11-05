@@ -298,6 +298,27 @@ class HttpServer extends Component
             $uri = substr($uri, 0, $pos);
         }
         
+        // Remove fragment
+        if (($pos = strpos($uri, '#')) !== false) {
+            $uri = substr($uri, 0, $pos);
+        }
+        
+        // Decode URL-encoded characters to prevent encoded path traversal attacks
+        $uri = rawurldecode($uri);
+        
+        // Security: Check for null bytes and reject
+        if (strpos($uri, "\0") !== false) {
+            return false;
+        }
+        
+        // Normalize path separators and remove consecutive slashes
+        $uri = preg_replace('#/+#', '/', $uri);
+        
+        // Security: Reject URIs containing path traversal patterns
+        if (strpos($uri, '..') !== false) {
+            return false;
+        }
+        
         // Get file extension
         $extension = pathinfo($uri, PATHINFO_EXTENSION);
         
@@ -315,7 +336,13 @@ class HttpServer extends Component
         }
         
         $realPath = realpath($filePath);
-        if ($realPath === false || strpos($realPath, $this->realDocRoot) !== 0) {
+        if ($realPath === false) {
+            return false;
+        }
+        
+        // Security: Ensure realPath is within documentRoot with proper directory boundary check
+        $realDocRootWithSeparator = rtrim($this->realDocRoot, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        if (strpos($realPath . DIRECTORY_SEPARATOR, $realDocRootWithSeparator) !== 0) {
             return false;
         }
         
@@ -333,6 +360,8 @@ class HttpServer extends Component
         // Set response headers
         $response->status(200);
         $response->header('Content-Type', $this->staticFileExtensions[$extension]);
+        $response->header('Content-Length', (string) strlen($content));
+        $response->header('X-Content-Type-Options', 'nosniff');
         
         // Add cache headers for static files
         $lastModified = filemtime($realPath);
