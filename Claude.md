@@ -24,5 +24,7 @@ Yii2 Swoole extension, provides coroutine http server and more coroutine feature
 
 ## Git Actions
 
-- Never commit changes without my approval, you should propose commit message and wait for my approval before committing.
+- Never commit to git after each code change, unless with user's explicit approval to do that.
+- Approval is ONE TIME, meaning each commit requires separate explicit approval.
+- Split changes by group to commit, maintaining code quality by organizing related changes into separate commits.
 - Commit message should be concise and descriptive, avoid verbose commit messages.
