@@ -26,6 +26,11 @@ class CoroutineDbConnection extends Connection
      */
     private static array $poolLocks = [];
 
+    /**
+     * @var bool Whether shutdown function has been registered
+     */
+    private static bool $shutdownRegistered = false;
+
     private ?string $poolKey = null;
 
     private bool $released = false;
@@ -88,6 +93,11 @@ class CoroutineDbConnection extends Connection
     private function ensurePool(): CoroutineConnectionPool
     {
         $key = $this->poolKey ??= $this->buildPoolKey();
+
+        // Register shutdown function on first pool creation as a safety net
+        if (!self::$shutdownRegistered) {
+            self::registerShutdownHandler();
+        }
 
         if (!isset(self::$sharedPools[$key])) {
             $lock = self::$poolLocks[$key] ??= $this->createPoolLock();
@@ -155,6 +165,7 @@ class CoroutineDbConnection extends Connection
      */
     public static function shutdownAllPools(): void
     {
+        // Shutdown all pools
         foreach (self::$sharedPools as $pool) {
             try {
                 $pool->shutdown();
@@ -163,7 +174,44 @@ class CoroutineDbConnection extends Connection
             }
         }
         
+        // Close and clear all pool locks
+        foreach (self::$poolLocks as $lock) {
+            try {
+                if ($lock instanceof Channel) {
+                    $lock->close();
+                }
+            } catch (\Throwable $e) {
+                // Silently handle lock close errors (channel may already be closed)
+            }
+        }
+        
         self::$sharedPools = [];
         self::$poolLocks = [];
+    }
+
+    /**
+     * Registers a PHP shutdown function as a safety net to ensure pools are cleaned up
+     * even if normal shutdown sequence fails (e.g., fatal error, crash)
+     */
+    private static function registerShutdownHandler(): void
+    {
+        if (self::$shutdownRegistered) {
+            return;
+        }
+
+        self::$shutdownRegistered = true;
+
+        register_shutdown_function(function (): void {
+            // Only cleanup if pools/locks still exist
+            // This prevents double cleanup during normal shutdown (since shutdownAllPools() clears the arrays)
+            if (!empty(self::$sharedPools) || !empty(self::$poolLocks)) {
+                try {
+                    self::shutdownAllPools();
+                } catch (\Throwable $e) {
+                    // Silently handle errors during shutdown handler
+                    error_log('[CoroutineDbConnection] Error in shutdown handler: ' . $e->getMessage());
+                }
+            }
+        });
     }
 }
