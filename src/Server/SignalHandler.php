@@ -33,6 +33,7 @@ class SignalHandler
     public function register(): void
     {
         if (!extension_loaded('pcntl')) {
+            // Use error_log here since Yii may not be initialized yet
             error_log('[SignalHandler] PCNTL extension not loaded, signal handling disabled');
             return;
         }
@@ -99,11 +100,13 @@ class SignalHandler
         $signalName = $signo === SIGTERM ? 'SIGTERM' : 'SIGINT';
         
         if ($this->shutdownRequested) {
+            // Use error_log during shutdown to ensure message is captured
             error_log("Forcing immediate exit");
             exit(1);
         }
         
         $this->shutdownRequested = true;
+        // Use error_log during shutdown to ensure message is captured
         error_log("Shutting down server...");
         
         // Perform graceful shutdown in a coroutine
@@ -135,6 +138,7 @@ class SignalHandler
             $elapsed = microtime(true) - $this->shutdownStartTime;
             
             if ($elapsed >= self::SHUTDOWN_TIMEOUT) {
+                // Use error_log during shutdown to ensure message is captured
                 error_log("Shutdown timeout reached, skipping remaining callbacks");
                 break;
             }
@@ -142,11 +146,13 @@ class SignalHandler
             try {
                 $config['callback']();
             } catch (\Throwable $e) {
+                // Use error_log during shutdown to ensure message is captured
                 error_log("Error in shutdown callback '{$name}': {$e->getMessage()}");
             }
         }
         
         $totalTime = microtime(true) - $this->shutdownStartTime;
+        // Use error_log during shutdown to ensure message is captured
         error_log(sprintf('Server shutdown completed in %.3f seconds', $totalTime));
         
         // Wait briefly for remaining coroutines to complete
@@ -176,6 +182,7 @@ class SignalHandler
             Coroutine::sleep(self::CHECK_INTERVAL);
         }
         
+        // Use error_log during shutdown to ensure message is captured
         error_log('Request timeout, proceeding with shutdown');
     }
 
@@ -203,6 +210,7 @@ class SignalHandler
         $stats = Coroutine::stats();
         $remaining = (int)($stats['coroutine_num'] ?? 0);
         if ($remaining > 2) {
+            // Use error_log during shutdown to ensure message is captured
             error_log("Warning: {$remaining} coroutines still active");
         }
     }

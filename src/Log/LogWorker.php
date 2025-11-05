@@ -81,10 +81,12 @@ class LogWorker
         $this->writeBufferedMessages();
 
         if (!empty($this->messageBuffer)) {
+            // Use error_log here to avoid recursion in logging system
             error_log('[LogWorker] Warning: ' . count($this->messageBuffer) . ' messages remain after stop');
         }
-
+        
         if ($this->droppedMessages > 0) {
+            // Use error_log here to avoid recursion in logging system
             error_log('[LogWorker] Warning: ' . $this->droppedMessages . ' messages were dropped (buffer full)');
         }
     }
@@ -134,6 +136,7 @@ class LogWorker
         $success = @file_put_contents($this->logFile, $text, FILE_APPEND | LOCK_EX);
         
         if ($success === false) {
+            // Use error_log here to avoid recursion in logging system
             error_log("LogWorker: Unable to write to log file: {$this->logFile}");
             return;
         }

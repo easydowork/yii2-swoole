@@ -154,7 +154,6 @@ class CoroutineRedisQueue extends CliQueue implements StatisticsProviderInterfac
                             $duration = round(microtime(true) - $startTime, 2);
                             $rate = $duration > 0 ? round($jobCount / $duration, 2) : 0;
                             \Yii::info("Shutdown requested, stopping worker after current job. Processed {$jobCount} jobs in {$duration}s ({$rate} jobs/s)", __METHOD__);
-                            error_log("[Queue] Breaking from serial worker loop due to shutdown");
                             break;
                         }
                     } catch (\yii\redis\SocketException $e) {
@@ -168,12 +167,9 @@ class CoroutineRedisQueue extends CliQueue implements StatisticsProviderInterfac
                         }
                     }
                 }
-                
-                error_log("[Queue] Exited serial worker loop");
             } finally {
                 // Return connection to pool when worker stops
                 $this->redis->close();
-                error_log("[Queue] Serial worker cleanup complete");
             }
         });
     }

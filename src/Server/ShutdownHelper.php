@@ -29,7 +29,7 @@ class ShutdownHelper
      * 2. Stops log workers (which flush their buffers to disk)
      * 3. Shuts down all log targets cleanly
      * 
-     * @param bool $verbose Whether to output progress messages to error_log
+     * @param bool $verbose Whether to output progress messages (currently unused, errors always logged)
      */
     public static function flushLogs(bool $verbose = true): void
     {
@@ -61,6 +61,7 @@ class ShutdownHelper
                         }
                     }
                 } catch (\Throwable $e) {
+                    // Use error_log here to avoid recursion in logging system during shutdown
                     error_log("Error stopping log worker '{$targetName}': {$e->getMessage()}");
                 }
             }
@@ -71,11 +72,13 @@ class ShutdownHelper
                     try {
                         $target->shutdown();
                     } catch (\Throwable $e) {
+                        // Use error_log here to avoid recursion in logging system during shutdown
                         error_log("Error shutting down log target '{$targetName}': {$e->getMessage()}");
                     }
                 }
             }
         } catch (\Throwable $e) {
+            // Use error_log here to avoid recursion in logging system during shutdown
             error_log('Error flushing logs: ' . $e->getMessage());
         }
     }
@@ -83,19 +86,21 @@ class ShutdownHelper
     /**
      * Closes all database and Redis connection pools
      * 
-     * @param bool $verbose Whether to output progress messages to error_log
+     * @param bool $verbose Whether to output progress messages (currently unused, errors always logged)
      */
     public static function closeConnectionPools(bool $verbose = true): void
     {
         try {
             CoroutineDbConnection::shutdownAllPools();
         } catch (\Throwable $e) {
+            // Use error_log during shutdown to ensure message is captured
             error_log('Error closing DB pools: ' . $e->getMessage());
         }
         
         try {
             CoroutineRedisConnection::shutdownAllPools();
         } catch (\Throwable $e) {
+            // Use error_log during shutdown to ensure message is captured
             error_log('Error closing Redis pools: ' . $e->getMessage());
         }
     }
@@ -106,7 +111,7 @@ class ShutdownHelper
      * This executes both log flushing and connection pool closing
      * in the correct order.
      * 
-     * @param bool $verbose Whether to output progress messages to error_log
+     * @param bool $verbose Whether to output progress messages (currently unused, errors always logged)
      */
     public static function performGracefulShutdown(bool $verbose = true): void
     {

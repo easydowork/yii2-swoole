@@ -138,6 +138,7 @@ class CoroutineFileTarget extends Target
         }
 
         if (($fp = @fopen($this->logFile, 'a')) === false) {
+            // Use error_log here to avoid recursion in logging system
             error_log("Unable to append to log file: {$this->logFile}");
             return;
         }
@@ -150,6 +151,7 @@ class CoroutineFileTarget extends Target
             $this->rotateFilesSync();
             
             if (($fp = @fopen($this->logFile, 'a')) === false) {
+                // Use error_log here to avoid recursion in logging system
                 error_log("Unable to reopen log file after rotation: {$this->logFile}");
                 return;
             }
@@ -207,6 +209,7 @@ class CoroutineFileTarget extends Target
             try {
                 $this->worker->stop();
             } catch (\Throwable $e) {
+                // Use error_log here to avoid recursion in logging system
                 error_log('[CoroutineFileTarget] Error stopping worker: ' . $e->getMessage());
             }
             $this->worker = null;
@@ -220,6 +223,7 @@ class CoroutineFileTarget extends Target
         try {
             $this->shutdown();
         } catch (\Throwable $e) {
+            // Use error_log here to avoid recursion in logging system
             error_log('[CoroutineFileTarget] Error during destruct: ' . $e->getMessage());
         }
     }

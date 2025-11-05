@@ -74,7 +74,7 @@ class CoroutineDbConnection extends Connection
             try {
                 $this->ensurePool()->release($pdo);
             } catch (\Throwable $e) {
-                error_log('[CoroutineDbConnection] Error releasing connection to pool: ' . $e->getMessage());
+                \Yii::error('Error releasing connection to pool: ' . $e->getMessage(), __CLASS__);
             }
         } else {
             parent::close();
@@ -208,7 +208,7 @@ class CoroutineDbConnection extends Connection
                 try {
                     self::shutdownAllPools();
                 } catch (\Throwable $e) {
-                    // Silently handle errors during shutdown handler
+                    // Use error_log here to avoid dependency on Yii during shutdown
                     error_log('[CoroutineDbConnection] Error in shutdown handler: ' . $e->getMessage());
                 }
             }

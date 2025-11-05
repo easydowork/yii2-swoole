@@ -95,7 +95,7 @@ class RequestDispatcher extends BaseObject implements RequestDispatcherInterface
                     try {
                         $store['db']->close();
                     } catch (\Throwable $e) {
-                        error_log('[RequestDispatcher] Error closing DB: ' . $e->getMessage());
+                        Yii::error('Error closing DB: ' . $e->getMessage(), __CLASS__);
                     }
                 }
                 
@@ -103,7 +103,7 @@ class RequestDispatcher extends BaseObject implements RequestDispatcherInterface
                     try {
                         $store['redis']->close();
                     } catch (\Throwable $e) {
-                        error_log('[RequestDispatcher] Error closing Redis: ' . $e->getMessage());
+                        Yii::error('Error closing Redis: ' . $e->getMessage(), __CLASS__);
                     }
                 }
             }

@@ -119,7 +119,7 @@ class CoroutineApplication extends Application
             try {
                 $store['db']->close();
             } catch (\Throwable $e) {
-                error_log("[CoroutineApplication] Error closing db: " . $e->getMessage());
+                \Yii::error('Error closing db: ' . $e->getMessage(), __CLASS__);
             }
         }
         
@@ -127,7 +127,7 @@ class CoroutineApplication extends Application
             try {
                 $store['redis']->close();
             } catch (\Throwable $e) {
-                error_log("[CoroutineApplication] Error closing redis: " . $e->getMessage());
+                \Yii::error('Error closing redis: ' . $e->getMessage(), __CLASS__);
             }
         }
         
