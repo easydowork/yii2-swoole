@@ -65,6 +65,14 @@ class RequestDispatcher extends BaseObject implements RequestDispatcherInterface
         $app = $this->getApplication();
         Yii::$app = $app;
 
+        // Change working directory to the application's web root to ensure
+        // relative paths (e.g., './fonts/books.ttf' in CaptchaAction) resolve correctly
+        $previousCwd = getcwd();
+        $webRoot = Yii::getAlias('@app/web', false) ?: Yii::getAlias('@webroot', false);
+        if ($webRoot && is_dir($webRoot)) {
+            chdir($webRoot);
+        }
+
         $restoreGlobals = $this->applySwooleGlobals($request, $app);
 
         $yiiRequest = $app->getRequest();
@@ -190,6 +198,12 @@ class RequestDispatcher extends BaseObject implements RequestDispatcherInterface
             }
 
             $this->restorePreviousApplication($previousApp);
+
+            // Restore the previous working directory
+            if ($previousCwd !== false) {
+                chdir($previousCwd);
+            }
+
             unset($yiiRequest, $yiiResponse, $restoreGlobals);
         }
     }
@@ -341,13 +355,29 @@ class RequestDispatcher extends BaseObject implements RequestDispatcherInterface
 
         [$class, $config] = $this->loadApplicationConfig();
 
+        // Save user-configured @webroot before app creation
+        // Yii2's Application::bootstrap() will override it based on script file
+        $configuredWebroot = $config['aliases']['@webroot'] ?? null;
+
         /** @var class-string<Application> $class */
         $this->application = new $class($config);
-        
+
         // Set @web alias for Swoole environment if not already set
         // This ensures asset URLs are generated correctly
         if (!Yii::getAlias('@web', false)) {
             Yii::setAlias('@web', '');
+        }
+
+        // Fix @webroot alias for Swoole environment
+        // Yii2's Application::bootstrap() sets @webroot based on the entry script,
+        // which doesn't work correctly in Swoole. Restore user config or use @app/web.
+        if ($configuredWebroot && is_dir($configuredWebroot)) {
+            Yii::setAlias('@webroot', $configuredWebroot);
+        } else {
+            $appWeb = Yii::getAlias('@app/web', false);
+            if ($appWeb && is_dir($appWeb)) {
+                Yii::setAlias('@webroot', $appWeb);
+            }
         }
 
         return $this->application;
