@@ -18,6 +18,12 @@ class Bootstrap implements BootstrapInterface
 
     public int $hookFlags = SWOOLE_HOOK_ALL;
 
+    /**
+     * @var array<string, string> Custom class map for overriding Yii2 core classes
+     * Example: ['yii\helpers\ArrayHelper' => '/path/to/custom/ArrayHelper.php']
+     */
+    public array $classMap = [];
+
     public function bootstrap($app): void
     {
         if ($memoryLimit = getenv('SWOOLE_MEMORY_LIMIT') ?: $this->memoryLimit) {
@@ -25,6 +31,15 @@ class Bootstrap implements BootstrapInterface
         }
 
         Yii::setAlias('@dacheng/swoole', __DIR__);
+
+        // Apply custom class map to override Yii2 core classes
+        if (!empty($this->classMap)) {
+            foreach ($this->classMap as $className => $classFile) {
+                // Resolve Yii aliases to actual paths
+                $resolvedPath = Yii::getAlias($classFile);
+                Yii::$classMap[$className] = $resolvedPath;
+            }
+        }
 
         $componentId = $this->componentId;
 

@@ -178,7 +178,7 @@ class SiteController extends Controller
     public function actionTest()
     {
         $request = Yii::$app->request;
-        
+
         return $this->asJson([
             'method' => $request->method,
             'path' => $request->pathInfo,
@@ -186,6 +186,20 @@ class SiteController extends Controller
             'post' => $request->bodyParams,
             'headers' => $request->headers->toArray(),
             'cookies' => array_keys($request->cookies->toArray()),
+        ]);
+    }
+
+    /**
+     * Test custom ArrayHelper (issue #47)
+     */
+    public function actionTestArrayHelper()
+    {
+        $testData = ['foo' => 'bar', 'nested' => ['key' => 'value']];
+
+        return $this->asJson([
+            'custom_test_method' => \yii\helpers\ArrayHelper::test($testData),
+            'standard_getValue' => \yii\helpers\ArrayHelper::getValue($testData, 'foo'),
+            'success' => true,
         ]);
     }
 

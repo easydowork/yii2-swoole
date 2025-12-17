@@ -1,6 +1,6 @@
 <?php
 
-use yii\helpers\ArrayHelper;
+use yii\helpers\BaseArrayHelper;
 
 $commonConfig = require __DIR__ . '/common.php';
 
@@ -34,4 +34,4 @@ $config = [
     'params' => require __DIR__ . '/params.php',
 ];
 
-return ArrayHelper::merge($commonConfig, $config);
+return BaseArrayHelper::merge($commonConfig, $config);

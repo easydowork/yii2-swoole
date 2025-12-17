@@ -161,7 +161,7 @@ $config = [
 
 // Merge Swoole config
 $swooleConfig = require __DIR__ . '/swoole.php';
-$config = \yii\helpers\ArrayHelper::merge($swooleConfig, $config);
+$config = \yii\helpers\BaseArrayHelper::merge($swooleConfig, $config);
 
 return $config;
 ```
@@ -183,6 +183,30 @@ curl http://127.0.0.1:9501/
 ## 📖 Documentation
 
 ### Configuration
+
+#### Bootstrap Options
+
+```php
+'bootstrap' => [
+    [
+        'class' => \Dacheng\Yii2\Swoole\Bootstrap::class,
+        'componentId' => 'swooleHttpServer',
+        'memoryLimit' => '2G',
+        'hookFlags' => SWOOLE_HOOK_ALL,
+        'classMap' => [
+            // Override Yii2 core classes
+            'yii\helpers\ArrayHelper' => '@app/helpers/ArrayHelper.php',
+            'yii\helpers\Json' => '@app/helpers/Json.php',
+        ],
+    ],
+],
+```
+
+**Options:**
+- `componentId` - Component ID for the HTTP server (default: 'swooleHttpServer')
+- `memoryLimit` - PHP memory limit for Swoole process (default: '512M')
+- `hookFlags` - Swoole hook flags for coroutine (default: SWOOLE_HOOK_ALL)
+- `classMap` - Custom class map for overriding Yii2 core classes (default: [])
 
 #### HTTP Server Options
 
@@ -505,4 +529,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 Made with ❤️ by the dacheng-php team
-

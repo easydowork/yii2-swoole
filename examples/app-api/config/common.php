@@ -7,6 +7,9 @@ return [
             'componentId' => 'swooleHttpServer',
             'memoryLimit' => '2G',
             'hookFlags' => SWOOLE_HOOK_ALL,
+            'classMap' => [
+                'yii\helpers\ArrayHelper' => '@app/helpers/ArrayHelper.php',
+            ],
         ],
         'queue',
     ],

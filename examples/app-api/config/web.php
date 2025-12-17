@@ -59,7 +59,7 @@ $config = [
     'params' => require __DIR__ . '/params.php',
 ];
 
-$config = \yii\helpers\ArrayHelper::merge($commonConfig, $config);
+$config = \yii\helpers\BaseArrayHelper::merge($commonConfig, $config);
 
 if (YII_ENV_DEV) {
     if (class_exists('yii\\debug\\Module')) {
